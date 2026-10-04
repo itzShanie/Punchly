@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Time Clock</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1C2024; --card:#262B31; --line:#383F47;
+    --amber:#E8A33D; --green:#4CAF6D; --red:#D9695F;
+    --text:#F2F0EA; --muted:#9AA4AF;
+    box-sizing:border-box;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif;
+    display:flex; flex-direction:column; align-items:center; padding:32px 16px 48px; margin:0;
+  }
+  .clock{ font-family:'IBM Plex Mono',monospace; font-size:clamp(2.4rem,7vw,3.6rem); }
+  .date{ color:var(--muted); font-size:0.9rem; }
+  .panel{ width:100%; max-width:680px; margin-top:30px; }
+  .section-head{ display:flex; justify-content:space-between; align-items:baseline; margin:30px 0 12px; }
+  .section-head h2{ font-size:0.95rem; font-weight:500; color:var(--muted); margin:0; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
+  .tile{
+    background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 12px;
+    text-align:left; cursor:pointer; color:var(--text); font-family:inherit; font-size:1rem;
+    display:flex; flex-direction:column; gap:6px;
+  }
+  .tile.on{ border-color:rgba(76,175,109,0.4); }
+  .status{ font-size:0.8rem; color:var(--muted); display:flex; align-items:center; gap:6px; }
+  .dot{ width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .tile.on .status{ color:var(--green); }
+  .tile.on .dot{ background:var(--green); }
+  .log-row, .sum-row{
+    background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 14px;
+    display:flex; justify-content:space-between; gap:12px; font-size:0.9rem; margin-bottom:8px;
+  }
+  .times{ font-family:'IBM Plex Mono',monospace; color:var(--muted); font-size:0.82rem; }
+  .dur{ font-family:'IBM Plex Mono',monospace; color:var(--amber); }
+  .empty{ color:var(--muted); font-size:0.9rem; }
+  dialog{ background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:12px; padding:24px; width:min(90vw,340px); font-family:inherit; }
+  dialog::backdrop{ background:rgba(0,0,0,0.5); }
+  .dialog-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+  .btn{ padding:9px 16px; border-radius:8px; border:1px solid var(--line); cursor:pointer; font-family:inherit; background:transparent; color:var(--text); }
+  .btn.primary{ background:var(--amber); border-color:var(--amber); color:#1C2024; font-weight:500; }
+  .btn.danger{ background:var(--red); border-color:var(--red); color:#1C2024; font-weight:500; }
+  .msg{ font-size:0.85rem; color:var(--red); min-height:1.2em; margin-top:6px; }
+</style>
+</head>
+<body>
+
+  <div id="authSection" class="panel">
+
+  <h2>Login</h2>
+
+  <input id="loginEmail"
+         placeholder="Email"
+         style="width:100%;padding:10px;margin-bottom:10px;">
+
+  <input id="loginPassword"
+         type="password"
+         placeholder="Password"
+         style="width:100%;padding:10px;margin-bottom:10px;">
+
+  <button class="btn primary" id="loginBtn">
+    Login
+  </button>
+
+  <hr style="margin:20px 0;">
+
+  <h2>Create Account</h2>
+
+  <select id="registerCompany"
+          style="width:100%;padding:10px;margin-bottom:10px;">
+
+    <option>Company A</option>
+    <option>Company B</option>
+    <option>Company C</option>
+    <option>Company D</option>
+
+  </select>
+
+  <input id="registerName"
+         placeholder="Name"
+         style="width:100%;padding:10px;margin-bottom:10px;">
+
+  <input id="registerEmail"
+         placeholder="Email"
+         style="width:100%;padding:10px;margin-bottom:10px;">
+
+  <input id="registerPassword"
+         type="password"
+         placeholder="Password"
+         style="width:100%;padding:10px;margin-bottom:10px;">
+
+  <button class="btn primary" id="registerBtn">
+    Create Account
+  </button>
+
+  <div id="authMsg" class="msg"></div>
+
+</div>
+ 
+<div class="date" id="dateLabel"></div>
+<div class="clock" id="liveClock">--:--:--</div>
+ 
+<div class="panel" id="appSection" style="display:none;">
+  <div class="section-head"><h2>My time clock
+  <div class="grid" id="employeeGrid"></div>
+
+
+  <button class="btn" style="margin-top:14px;" onclick="document.getElementById('ptoDialog').showModal()">Request time off</button>
+
+  <button class="btn" id="logoutBtn">
+  Logout
+ </button>
+
+<dialog id="ptoDialog">
+  <div style="font-size:1.1rem; margin-bottom:14px;">Request time off</div>
+  <select id="ptoEmployee" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;"></select>
+  <input type="date" id="ptoStart" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+  <input type="date" id="ptoEnd" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+  <input type="text" id="ptoReason" placeholder="Reason (optional)" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+  <div class="msg" id="ptoMsg"></div>
+  <div class="dialog-actions">
+    <button class="btn" onclick="document.getElementById('ptoDialog').close()">Cancel</button>
+    <button class="btn primary" id="ptoSubmit">Submit</button>
+  </div>
+</dialog>
+ 
+  <div class="section-head"><h2>Today's log</h2></div>
+  <div id="logList"></div>
+ 
+  <div class="section-head"><h2>Total hours logged</h2></div>
+  <div id="summaryList"></div>
+</div>
+ 
+<dialog id="confirmDialog">
+  <div id="confirmName" style="font-size:1.1rem;"></div>
+  <div id="confirmSub" style="color:var(--muted); font-size:0.88rem; margin-top:4px;"></div>
+  <div class="msg" id="confirmMsg"></div>
+  <div class="dialog-actions">
+    <button class="btn" id="confirmCancel">Cancel</button>
+    <button class="btn primary" id="confirmOk">Confirm</button>
+  </div>
+</dialog>
+ 
+<script>
+// Same-origin server, so requests can just use relative paths like '/employees'
+let employees = [];
+let entries = [];
+let pendingEmpId = null;
+let currentUser = null;
+
+// Identifies THIS browser/device, generated once and kept forever in localStorage —
+// this is what lets the server count how many different devices an employee has logged in from.
+let deviceId = localStorage.getItem('deviceId');
+if (!deviceId) {
+  deviceId = crypto.randomUUID();
+  localStorage.setItem('deviceId', deviceId);
+}
+ 
+function tickClock(){
+  const now = new Date();
+  document.getElementById('liveClock').textContent = now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  document.getElementById('dateLabel').textContent = now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+function restoreLogin(){
+
+  const saved =
+    localStorage.getItem('user');
+
+  if(!saved)
+    return;
+
+  currentUser = JSON.parse(saved);
+
+  document.getElementById('authSection').style.display = 'none';
+  document.getElementById('appSection').style.display = 'block';
+
+}
+
+function fmtTime(ts){ return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+function todayKey(ts){ const d = new Date(ts); return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate(); }
+function escapeHtml(s){
+  return String(s).replace(
+    /[&<>"]/g,
+    c => ({
+      '&':'&amp;',
+      '<':'&lt;',
+      '>':'&gt;',
+      '"':'&quot;'
+    }[c])
+  );
+}
+ 
+// fetch() sends a request the same way Thunder Client has been sending them.
+// 'await' pauses this function until the server responds, without freezing the page.
+async function loadData(){
+
+  const allEmployees =
+    await fetch('/employees').then(r => r.json());
+
+  employees = currentUser
+    ? allEmployees.filter(e => e.id === currentUser.id)
+    : [];
+
+  entries = await fetch('/entries').then(r => r.json());
+
+  const summary =
+    await fetch('/summary').then(r => r.json());
+
+  render(summary);
+}
+ 
+function activeEntryFor(empId){
+  return entries.find(e => e.employeeId === empId && !e.clockOut);
+}
+ 
+function render(summary){
+  const grid = document.getElementById('employeeGrid');
+  grid.innerHTML = '';
+  employees.forEach(emp => {
+    const active = activeEntryFor(emp.id);
+    const tile = document.createElement('button');
+    tile.className = 'tile' + (active ? ' on' : '');
+    tile.innerHTML = `<span>${escapeHtml(emp.name)}</span>
+      <span class="status"><span class="dot"></span>${active ? 'On the clock' : 'Clocked out'}</span>`;
+    tile.addEventListener('click', () => openConfirm(emp.id));
+    grid.appendChild(tile);
+  });
+
+  fillPtoDropdown();
+ 
+  const key = todayKey(Date.now());
+  // Filtering by currentUser.id here matters — without it, every employee could see
+  // every other company's punches mixed into their own "today's log."
+  const todays = entries
+    .filter(e => e.employeeId === currentUser.id && todayKey(e.clockIn) === key)
+    .sort((a,b) => b.clockIn - a.clockIn);
+  const logList = document.getElementById('logList');
+  logList.innerHTML = todays.length === 0 ? '<div class="empty">No punches yet today.</div>' : '';
+  todays.forEach(e => {
+    const timesText = e.clockOut ? fmtTime(e.clockIn)+' – '+fmtTime(e.clockOut) : fmtTime(e.clockIn)+' – now';
+    const row = document.createElement('div');
+    row.className = 'log-row';
+    row.innerHTML = `<span>${escapeHtml(currentUser.name)}</span><span class="times">${timesText}</span>`;
+    logList.appendChild(row);
+  });
+ 
+  const mySummary = summary.filter(s => s.employeeId === currentUser.id);
+  const sumList = document.getElementById('summaryList');
+  sumList.innerHTML = mySummary.length === 0 ? '<div class="empty">No completed shifts yet.</div>' : '';
+  mySummary.forEach(s => {
+    const row = document.createElement('div');
+    row.className = 'sum-row';
+    row.innerHTML = `<span>${escapeHtml(currentUser.name)}</span><span class="dur">${s.hours} hrs</span>`;
+    sumList.appendChild(row);
+  });
+}
+ 
+// Wraps the browser's geolocation API in a Promise so we can use await with it.
+function getLocation(){
+  return new Promise((resolve, reject) => {
+    if(!navigator.geolocation){ reject(new Error('Geolocation not supported')); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      err => reject(err),
+      { enableHighAccuracy: true, timeout: 8000 }
+    );
+  });
+}
+ 
+const confirmDialog = document.getElementById('confirmDialog');
+function openConfirm(empId){
+  pendingEmpId = empId;
+  const emp = employees.find(x => x.id === empId);
+  const active = activeEntryFor(empId);
+  document.getElementById('confirmName').textContent = emp.name;
+  document.getElementById('confirmSub').textContent = active ? 'Clock out now?' : 'Clock in now?';
+  document.getElementById('confirmMsg').textContent = '';
+  const okBtn = document.getElementById('confirmOk');
+  okBtn.textContent = active ? 'Clock out' : 'Clock in';
+  okBtn.className = 'btn ' + (active ? 'danger' : 'primary');
+  confirmDialog.showModal();
+}
+document.getElementById('confirmCancel').addEventListener('click', () => confirmDialog.close());
+ 
+document.getElementById('confirmOk').addEventListener('click', async () => {
+  const msg = document.getElementById('confirmMsg');
+  const active = activeEntryFor(pendingEmpId);
+  msg.textContent = '';
+  try{
+    let res;
+    if(active){
+      res = await fetch('/clock-out', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ employeeId: pendingEmpId })
+      });
+    } else {
+      const loc = await getLocation(); // only clock-in needs a location, since only /clock-in checks the geofence
+      res = await fetch('/clock-in', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ employeeId: pendingEmpId, latitude: loc.latitude, longitude: loc.longitude })
+      });
+    }
+    const data = await res.json();
+    if(!data.success){
+      msg.textContent = data.message || 'Something went wrong.';
+      return;
+    }
+    confirmDialog.close();
+    await loadData();
+  } catch(err){
+    msg.textContent = err.message === 'User denied Geolocation'
+      ? 'Location permission is required to clock in.'
+      : 'Could not reach the server.';
+  }
+});
+
+restoreLogin();
+
+if(currentUser){
+  loadData();
+}
+
+document.getElementById('logoutBtn')
+.addEventListener('click', () => {
+
+  localStorage.removeItem('user');
+
+  location.reload();
+
+});
+
+document.getElementById('loginBtn')
+.addEventListener('click', async () => {
+
+  const email =
+    document.getElementById('loginEmail').value;
+
+  const password =
+    document.getElementById('loginPassword').value;
+
+  const res = await fetch('/login', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json'
+    },
+    body: JSON.stringify({
+      email,
+      password,
+      deviceId
+    })
+  });
+
+  const data = await res.json();
+
+  if(!data.success){
+
+    document.getElementById('authMsg').textContent =
+      data.message;
+
+    return;
+  }
+
+  currentUser = data.user;
+
+  localStorage.setItem(
+    'user',
+    JSON.stringify(data.user)
+  );
+
+  document.getElementById('authSection').style.display = 'none';
+  document.getElementById('appSection').style.display = 'block';
+
+  loadData();
+
+});
+
+document.getElementById('registerBtn')
+.addEventListener('click', async () => {
+
+  const company =
+    document.getElementById('registerCompany').value;
+
+  const name =
+    document.getElementById('registerName').value;
+
+  const email =
+    document.getElementById('registerEmail').value;
+
+  const password =
+    document.getElementById('registerPassword').value;
+
+  const res = await fetch('/register', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json'
+    },
+    body: JSON.stringify({
+      company,
+      name,
+      email,
+      password,
+      deviceId
+    })
+  });
+
+  const data = await res.json();
+
+  document.getElementById('authMsg').textContent =
+    data.success
+      ? 'Account created! You can now log in.'
+      : data.message;
+
+});
+
+function fillPtoDropdown(){
+  const sel = document.getElementById('ptoEmployee');
+
+  sel.innerHTML = employees
+    .map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`)
+    .join('');
+}
+
+document.getElementById('ptoSubmit').addEventListener('click', async () => {
+
+  const employeeId =
+    Number(document.getElementById('ptoEmployee').value);
+
+  const startDate =
+    document.getElementById('ptoStart').value;
+
+  const endDate =
+    document.getElementById('ptoEnd').value;
+
+  const reason =
+    document.getElementById('ptoReason').value;
+
+  const msg =
+    document.getElementById('ptoMsg');
+
+  if(!startDate || !endDate){
+    msg.textContent = 'Pick both dates.';
+    return;
+  }
+
+  const res = await fetch('/pto-request', {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json'
+    },
+    body: JSON.stringify({
+      employeeId,
+      startDate,
+      endDate,
+      reason
+    })
+  });
+
+  const data = await res.json();
+
+  if(data.success){
+
+    document.getElementById('ptoDialog').close();
+
+    msg.textContent = '';
+
+  } else {
+
+    msg.textContent = 'Could not submit request.';
+
+  }
+
+});
+
+</script>
+</body>
+</html>

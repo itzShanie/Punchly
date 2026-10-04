@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Manager Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#1C2024; --card:#262B31; --line:#383F47; --amber:#E8A33D; --green:#4CAF6D; --red:#D9695F; --text:#F2F0EA; --muted:#9AA4AF; box-sizing:border-box; }
+  *{box-sizing:border-box;}
+  body{ background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif; max-width:720px; margin:0 auto; padding:32px 16px 48px; }
+  h1{ font-size:1.6rem; font-weight:500; }
+  h2{ font-size:1rem; font-weight:500; color:var(--muted); margin:30px 0 12px; }
+  .row{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
+  .who{ font-weight:500; }
+  .sub{ color:var(--muted); font-size:0.85rem; font-family:'IBM Plex Mono',monospace; }
+  .btn{ padding:8px 14px; border-radius:8px; border:1px solid var(--line); cursor:pointer; font-family:inherit; background:transparent; color:var(--text); font-size:0.85rem; }
+  .btn.approve{ background:var(--green); border-color:var(--green); color:#1C2024; font-weight:500; }
+  .btn.deny{ background:var(--red); border-color:var(--red); color:#1C2024; font-weight:500; }
+  .empty{ color:var(--muted); font-size:0.9rem; }
+  .actions{ display:flex; gap:8px; }
+</style>
+</head>
+<body>
+<div id="loginSection" style="max-width:340px; margin:60px auto;">
+  <h1>Manager Login</h1>
+  <input id="loginEmail" placeholder="Email" style="width:100%;padding:10px;margin-bottom:10px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;">
+  <input id="loginPassword" type="password" placeholder="Password" style="width:100%;padding:10px;margin-bottom:10px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;">
+  <div class="empty" id="loginMsg" style="color:var(--red);"></div>
+  <button class="btn approve" id="loginBtn" style="width:100%;margin-top:6px;">Log in</button>
+</div>
+
+<div id="dashboardSection" style="display:none;">
+<div style="display:flex; justify-content:space-between; align-items:center;">
+<h1>Manager Dashboard</h1>
+<button class="btn" id="logoutBtn">Log out</button>
+</div>
+
+<select id="companySelect" style="width:100%; padding:10px; margin-top:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;"></select>
+
+<h2>Employees & pay rate</h2>
+<div id="payRateList"></div>
+
+<h2>Geofenced sites</h2>
+<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+  <input type="text" id="siteName" placeholder="Site name" style="flex:1; min-width:100px; padding:9px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+  <input type="number" step="any" id="siteLat" placeholder="Latitude" style="flex:1; min-width:100px; padding:9px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+  <input type="number" step="any" id="siteLng" placeholder="Longitude" style="flex:1; min-width:100px; padding:9px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+  <input type="number" id="siteRadius" placeholder="Radius (m)" value="150" style="flex:1; min-width:100px; padding:9px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+  <button class="btn approve" id="addSiteBtn">Add site</button>
+</div>
+<div id="sitesList"></div>
+
+<h2>Timesheets awaiting approval</h2>
+<div id="entriesList"></div>
+
+<h2>PTO requests</h2>
+<div id="ptoList"></div>
+
+<h2>Export</h2>
+<div class="row" style="flex-direction:column; align-items:stretch; gap:10px;">
+  <div style="display:flex; gap:10px;">
+    <input type="date" id="exportStart" style="flex:1; padding:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+    <input type="date" id="exportEnd" style="flex:1; padding:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+  </div>
+  <div style="display:flex; gap:10px;">
+    <button class="btn" id="exportAttendance">Export attendance (CSV)</button>
+    <button class="btn primary" id="exportPayroll">Export payroll (CSV)</button>
+  </div>
+</div>
+</div><!-- /dashboardSection -->
+
+<script>
+let employees = [];
+let currentCompany = null;
+let currentManager = null;
+
+function restoreManagerLogin(){
+  const saved = localStorage.getItem('manager');
+  if (!saved) return;
+  currentManager = JSON.parse(saved);
+  document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('dashboardSection').style.display = 'block';
+}
+
+document.getElementById('loginBtn').addEventListener('click', async () => {
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  const res = await fetch('/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
+  const data = await res.json();
+  if (!data.success) { document.getElementById('loginMsg').textContent = data.message; return; }
+  if (data.user.role !== 'manager') { document.getElementById('loginMsg').textContent = 'This account is not a manager.'; return; }
+  currentManager = data.user;
+  localStorage.setItem('manager', JSON.stringify(data.user));
+  document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('dashboardSection').style.display = 'block';
+  init();
+});
+
+document.getElementById('logoutBtn').addEventListener('click', () => {
+  localStorage.removeItem('manager');
+  location.reload();
+});
+
+function fmtTime(ts){ return new Date(ts).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}); }
+function empName(id){ const e = employees.find(x => x.id === id); return e ? e.name : 'Unknown (#' + id + ')'; }
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function loadCompanies(){
+  const companies = await fetch('/companies').then(r => r.json());
+  const sel = document.getElementById('companySelect');
+  sel.innerHTML = companies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  currentCompany = companies[0];
+  sel.addEventListener('change', () => { currentCompany = sel.value; loadAll(); });
+}
+
+async function loadPayRates(){
+  employees = await fetch('/employees?company=' + encodeURIComponent(currentCompany)).then(r => r.json());
+  const list = document.getElementById('payRateList');
+  list.innerHTML = employees.length === 0 ? '<div class="empty">No employees yet in this company.</div>' : '';
+  employees.forEach(emp => {
+    const div = document.createElement('div');
+    div.className = 'row';
+    div.innerHTML = `<div class="who">${escapeHtml(emp.name)}</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="number" step="0.01" value="${emp.hourlyRate}" style="width:90px; padding:7px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+        <button class="btn">Save rate</button>
+      </div>`;
+    const input = div.querySelector('input');
+    div.querySelector('button').addEventListener('click', async () => {
+      await fetch('/set-rate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ employeeId: emp.id, hourlyRate: Number(input.value), managerId: currentManager.id }) });
+    });
+    list.appendChild(div);
+  });
+}
+
+async function loadSites(){
+  const rows = await fetch('/sites?company=' + encodeURIComponent(currentCompany)).then(r => r.json());
+  const list = document.getElementById('sitesList');
+  list.innerHTML = rows.length === 0 ? '<div class="empty">No sites yet for this company.</div>' : '';
+  rows.forEach(s => {
+    const div = document.createElement('div');
+    div.className = 'row';
+    div.innerHTML = `<div><div class="who">${escapeHtml(s.name)}</div><div class="sub">${s.lat}, ${s.lng} &middot; ${s.radiusMeters}m</div></div><button class="btn deny">Remove</button>`;
+    div.querySelector('button').addEventListener('click', async () => {
+      await fetch('/sites/' + s.id + '?managerId=' + currentManager.id, { method:'DELETE' });
+      loadSites();
+    });
+    list.appendChild(div);
+  });
+}
+
+document.getElementById('addSiteBtn').addEventListener('click', async () => {
+  const name = document.getElementById('siteName').value;
+  const lat = Number(document.getElementById('siteLat').value);
+  const lng = Number(document.getElementById('siteLng').value);
+  const radiusMeters = Number(document.getElementById('siteRadius').value);
+  if (!name || !lat || !lng) return;
+  await fetch('/sites', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ company: currentCompany, name, lat, lng, radiusMeters, managerId: currentManager.id }) });
+  document.getElementById('siteName').value = '';
+  document.getElementById('siteLat').value = '';
+  document.getElementById('siteLng').value = '';
+  loadSites();
+});
+
+async function loadEntries(){
+  const rows = await fetch('/pending-entries?company=' + encodeURIComponent(currentCompany)).then(r => r.json());
+  const list = document.getElementById('entriesList');
+  list.innerHTML = rows.length === 0 ? '<div class="empty">Nothing waiting on approval.</div>' : '';
+  rows.forEach(e => {
+    const div = document.createElement('div');
+    div.className = 'row';
+    div.innerHTML = `
+      <div>
+        <div class="who">${escapeHtml(empName(e.employeeId))}</div>
+        <div class="sub">${fmtTime(e.clockIn)} &ndash; ${fmtTime(e.clockOut)}</div>
+      </div>
+      <button class="btn approve">Approve</button>`;
+    div.querySelector('button').addEventListener('click', async () => {
+      await fetch('/approve-entry', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entryId: e.id, managerId: currentManager.id }) });
+      loadEntries();
+    });
+    list.appendChild(div);
+  });
+}
+
+async function loadPto(){
+  const rows = await fetch('/pto-requests?status=pending&company=' + encodeURIComponent(currentCompany)).then(r => r.json());
+  const list = document.getElementById('ptoList');
+  list.innerHTML = rows.length === 0 ? '<div class="empty">No pending time-off requests.</div>' : '';
+  rows.forEach(p => {
+    const div = document.createElement('div');
+    div.className = 'row';
+    div.innerHTML = `
+      <div>
+        <div class="who">${escapeHtml(empName(p.employeeId))}</div>
+        <div class="sub">${p.startDate} &ndash; ${p.endDate}${p.reason ? ' &middot; ' + escapeHtml(p.reason) : ''}</div>
+      </div>
+      <div class="actions">
+        <button class="btn approve">Approve</button>
+        <button class="btn deny">Deny</button>
+      </div>`;
+    const [approveBtn, denyBtn] = div.querySelectorAll('button');
+    approveBtn.addEventListener('click', () => decide(p.id, 'approved'));
+    denyBtn.addEventListener('click', () => decide(p.id, 'denied'));
+    list.appendChild(div);
+  });
+}
+
+async function decide(requestId, decision){
+  await fetch('/pto-decision', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ requestId, decision, managerId: currentManager.id }) });
+  loadPto();
+}
+
+function loadAll(){
+  loadPayRates();
+  loadSites();
+  loadEntries();
+  loadPto();
+}
+
+async function init(){
+  await loadCompanies();
+  loadAll();
+}
+
+restoreManagerLogin();
+if (currentManager) init();
+
+document.getElementById('exportAttendance').addEventListener('click', () => {
+  const start = document.getElementById('exportStart').value;
+  const end = document.getElementById('exportEnd').value;
+  window.location.href = `/export/attendance?start=${start}&end=${end}&company=${encodeURIComponent(currentCompany)}`;
+});
+document.getElementById('exportPayroll').addEventListener('click', () => {
+  const start = document.getElementById('exportStart').value;
+  const end = document.getElementById('exportEnd').value;
+  window.location.href = `/export/payroll?start=${start}&end=${end}&company=${encodeURIComponent(currentCompany)}`;
+});
+
+</script>
+</body>
+</html>
