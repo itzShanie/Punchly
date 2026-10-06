@@ -3,7 +3,6 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="author" content="Shanan">
 <title>Manager Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -496,7 +495,6 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
 
 </main>
 
-<footer class="credit">Made with care by Shanan <span class="heart" aria-hidden="true">♥</span></footer>
 
 <!-- Shows a new password reset code -->
 <dialog id="codeDialog">
@@ -843,6 +841,7 @@ async function loadEmployees() {
         <button class="btn primary small" data-act="rate">Save rate</button>
         <button class="btn ghost small" data-act="devices">Reset devices</button>
         <button class="btn ghost small" data-act="code">Password code</button>
+        <button class="btn danger small" data-act="delete">Delete</button>
       </div>`);
 
     const rateBtn = div.querySelector('[data-act="rate"]');
@@ -862,6 +861,14 @@ async function loadEmployees() {
     });
 
     div.querySelector('[data-act="code"]').addEventListener('click', () => createResetCode(emp.id, emp.name));
+
+    div.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+      if (!confirm(`Delete ${emp.name}'s account?\n\nThis also deletes all their shifts and time-off requests, so their hours won't show up in exports anymore. Download payroll first if you still need it.\n\nThis can't be undone.`)) return;
+      try {
+        await api('/employees/' + emp.id, { method: 'DELETE' });
+        loadAll(); // refresh every section, since their shifts and requests are gone too
+      } catch (err) { showError(err); }
+    });
 
     list.appendChild(div);
   });

@@ -535,6 +535,25 @@ app.post('/set-rate', requireManager, (req, res) => {
   res.json({ success: true });
 });
 
+// Deletes an employee and everything tied to them (shifts, time off, devices, logins, reset codes).
+// Only works on employees, so a manager can't delete themselves or another manager by accident.
+app.delete('/employees/:id', requireManager, (req, res) => {
+  const user = db.prepare("SELECT id FROM users WHERE id = ? AND role = 'employee'").get(req.params.id);
+  if (!user) return res.status(404).json({ success: false, message: 'Employee not found.' });
+
+  // A transaction = all of these happen together, or none of them do
+  db.transaction(() => {
+    db.prepare('DELETE FROM entries WHERE employeeId = ?').run(user.id);
+    db.prepare('DELETE FROM pto_requests WHERE employeeId = ?').run(user.id);
+    db.prepare('DELETE FROM user_devices WHERE userId = ?').run(user.id);
+    db.prepare('DELETE FROM sessions WHERE userId = ?').run(user.id);
+    db.prepare('DELETE FROM password_resets WHERE userId = ?').run(user.id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+  })();
+
+  res.json({ success: true });
+});
+
 // NEW: clears an employee's saved devices and logs them out everywhere
 app.post('/reset-devices', requireManager, (req, res) => {
   const { employeeId } = req.body;
