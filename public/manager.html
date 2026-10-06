@@ -3,241 +3,644 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="author" content="Shanan">
 <title>Manager Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{ --bg:#1C2024; --card:#262B31; --line:#383F47; --amber:#E8A33D; --green:#4CAF6D; --red:#D9695F; --text:#F2F0EA; --muted:#9AA4AF; box-sizing:border-box; }
-  *{box-sizing:border-box;}
-  body{ background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif; max-width:720px; margin:0 auto; padding:32px 16px 48px; }
-  h1{ font-size:1.6rem; font-weight:500; }
-  h2{ font-size:1rem; font-weight:500; color:var(--muted); margin:30px 0 12px; }
-  .row{ background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:10px; }
-  .who{ font-weight:500; }
-  .sub{ color:var(--muted); font-size:0.85rem; font-family:'IBM Plex Mono',monospace; }
-  .btn{ padding:8px 14px; border-radius:8px; border:1px solid var(--line); cursor:pointer; font-family:inherit; background:transparent; color:var(--text); font-size:0.85rem; }
-  .btn.approve{ background:var(--green); border-color:var(--green); color:#1C2024; font-weight:500; }
-  .btn.deny{ background:var(--red); border-color:var(--red); color:#1C2024; font-weight:500; }
-  .empty{ color:var(--muted); font-size:0.9rem; }
-  .actions{ display:flex; gap:8px; }
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
 </head>
-<body>
-<div id="loginSection" style="max-width:340px; margin:60px auto;">
-  <h1>Manager Login</h1>
-  <input id="loginEmail" placeholder="Email" style="width:100%;padding:10px;margin-bottom:10px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;">
-  <input id="loginPassword" type="password" placeholder="Password" style="width:100%;padding:10px;margin-bottom:10px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;">
-  <div class="empty" id="loginMsg" style="color:var(--red);"></div>
-  <button class="btn approve" id="loginBtn" style="width:100%;margin-top:6px;">Log in</button>
-</div>
+<body class="wide">
 
-<div id="dashboardSection" style="display:none;">
-<div style="display:flex; justify-content:space-between; align-items:center;">
-<h1>Manager Dashboard</h1>
-<button class="btn" id="logoutBtn">Log out</button>
-</div>
-
-<select id="companySelect" style="width:100%; padding:10px; margin-top:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;"></select>
-
-<h2>Employees & pay rate</h2>
-<div id="payRateList"></div>
-
-<h2>Geofenced sites</h2>
-<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
-  <input type="text" id="siteName" placeholder="Site name" style="flex:1; min-width:100px; padding:9px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
-  <input type="number" step="any" id="siteLat" placeholder="Latitude" style="flex:1; min-width:100px; padding:9px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
-  <input type="number" step="any" id="siteLng" placeholder="Longitude" style="flex:1; min-width:100px; padding:9px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
-  <input type="number" id="siteRadius" placeholder="Radius (m)" value="150" style="flex:1; min-width:100px; padding:9px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
-  <button class="btn approve" id="addSiteBtn">Add site</button>
-</div>
-<div id="sitesList"></div>
-
-<h2>Timesheets awaiting approval</h2>
-<div id="entriesList"></div>
-
-<h2>PTO requests</h2>
-<div id="ptoList"></div>
-
-<h2>Export</h2>
-<div class="row" style="flex-direction:column; align-items:stretch; gap:10px;">
-  <div style="display:flex; gap:10px;">
-    <input type="date" id="exportStart" style="flex:1; padding:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
-    <input type="date" id="exportEnd" style="flex:1; padding:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true">
+      <defs>
+        <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#2EC4B6"/>
+          <stop offset="1" stop-color="#8CC8F5"/>
+        </linearGradient>
+      </defs>
+      <rect width="40" height="40" rx="12" fill="url(#brandGrad)"/>
+      <circle cx="20" cy="21" r="10.5" fill="none" stroke="#fff" stroke-width="2.6"/>
+      <path d="M20 15v6l4.2 2.8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="31.5" cy="8.5" r="4.2" fill="#F48FBF" stroke="#fff" stroke-width="2"/>
+    </svg>
+    <span>Time Clock<span class="brand-sub">Manager</span></span>
   </div>
-  <div style="display:flex; gap:10px;">
-    <button class="btn" id="exportAttendance">Export attendance (CSV)</button>
-    <button class="btn primary" id="exportPayroll">Export payroll (CSV)</button>
+  <div class="topbar-actions">
+    <button class="icon-btn" data-theme-toggle></button>
+    <button class="btn ghost small" id="logoutBtn" hidden>Log out</button>
   </div>
-</div>
-</div><!-- /dashboardSection -->
+</header>
+
+<main class="page">
+
+  <!-- ============ Login ============ -->
+  <section id="loginSection" style="max-width:380px; margin:40px auto 0;" hidden>
+    <h1 style="margin-bottom:6px;">Manager login</h1>
+    <p class="muted" style="margin-bottom:20px;">Approve hours, manage sites and export payroll.</p>
+    <div class="card">
+      <label class="label" for="loginEmail">Email</label>
+      <input class="field" id="loginEmail" type="email" autocomplete="username">
+      <label class="label" for="loginPassword">Password</label>
+      <input class="field" id="loginPassword" type="password" autocomplete="current-password">
+      <button class="btn primary block big" id="loginBtn">Log in</button>
+      <div class="msg" id="loginMsg"></div>
+      <p class="muted small" style="margin-top:16px;">Forgot your manager password? Ask whoever set up this app to reset it for you.</p>
+    </div>
+  </section>
+
+  <!-- ============ Dashboard ============ -->
+  <section id="dashboardSection" hidden>
+    <div style="display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px; margin:10px 0 18px;">
+      <div>
+        <h1 id="hello">Dashboard</h1>
+        <p class="muted" id="todayLabel"></p>
+      </div>
+      <div style="min-width:200px; flex:0 1 260px;">
+        <label class="label" for="companySelect">Company</label>
+        <select class="field" id="companySelect" style="margin:0;"></select>
+      </div>
+    </div>
+    <div class="msg" id="pageMsg" style="margin-bottom:12px;"></div>
+
+    <div class="card">
+      <div class="card-head"><h2>On the clock now <span class="badge count" id="openCount" hidden></span></h2></div>
+      <p class="hint">If someone forgot to clock out, set the time they actually left.</p>
+      <div id="openList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Timesheets to approve <span class="badge count" id="entriesCount" hidden></span></h2></div>
+      <div id="entriesList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Time-off requests <span class="badge count" id="ptoCount" hidden></span></h2></div>
+      <div id="ptoList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Password help <span class="badge count" id="resetCount" hidden></span></h2></div>
+      <p class="hint">When someone taps "Forgot password", they show up here. Create a code and give it to them in person or by text.</p>
+      <div id="resetList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Employees and pay rates</h2></div>
+      <div id="payRateList"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Work sites</h2></div>
+      <p class="hint">Employees can only clock in inside one of these circles. Standing at the site? Use your current location.</p>
+      <div class="site-form">
+        <div><label class="label" for="siteName">Site name</label><input class="field" type="text" id="siteName" placeholder="Main shop"></div>
+        <div><label class="label" for="siteLat">Latitude</label><input class="field" type="number" step="any" id="siteLat"></div>
+        <div><label class="label" for="siteLng">Longitude</label><input class="field" type="number" step="any" id="siteLng"></div>
+        <div><label class="label" for="siteRadius">Radius (meters)</label><input class="field" type="number" id="siteRadius" value="150" min="1"></div>
+      </div>
+      <div class="actions">
+        <button class="btn ghost" id="useLocationBtn">Use my current location</button>
+        <button class="btn primary" id="addSiteBtn">Add site</button>
+      </div>
+      <div class="msg" id="siteMsg"></div>
+      <div id="sitesList" style="margin-top:16px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Export</h2></div>
+      <div class="export-dates">
+        <div>
+          <label class="label" for="exportStart">From</label>
+          <input class="field" type="date" id="exportStart">
+        </div>
+        <div>
+          <label class="label" for="exportEnd">To</label>
+          <input class="field" type="date" id="exportEnd">
+        </div>
+      </div>
+      <div class="actions" style="margin-top:14px;">
+        <button class="btn ghost" id="exportAttendance">Download attendance (CSV)</button>
+        <button class="btn primary" id="exportPayroll">Download payroll (CSV)</button>
+      </div>
+      <p class="hint" style="margin:12px 0 0;">Payroll only pays approved shifts. Hours still waiting for approval are listed in the "unapprovedHours" column.</p>
+      <div class="msg" id="exportMsg"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="credit">Made with care by Shanan <span class="heart" aria-hidden="true">♥</span></footer>
+
+<!-- Shows a new password reset code -->
+<dialog id="codeDialog">
+  <div class="dialog-title" id="codeFor">Reset code</div>
+  <p class="muted small">Give this code to them. It works once and expires in 24 hours. They enter it under "Forgot password?" on the login page.</p>
+  <div class="code" id="codeValue"></div>
+  <div class="dialog-actions">
+    <button class="btn ghost" id="copyCodeBtn">Copy</button>
+    <button class="btn primary" id="codeDoneBtn">Done</button>
+  </div>
+</dialog>
 
 <script>
-let employees = [];
-let currentCompany = null;
+let token = null;
 let currentManager = null;
+let currentCompany = null;
 
-function restoreManagerLogin(){
-  const saved = localStorage.getItem('manager');
-  if (!saved) return;
-  currentManager = JSON.parse(saved);
-  document.getElementById('loginSection').style.display = 'none';
-  document.getElementById('dashboardSection').style.display = 'block';
+const $ = id => document.getElementById(id);
+
+// ---------------------------------------------------------------
+// Talking to the server (adds the login token to every request)
+// ---------------------------------------------------------------
+async function api(path, { method = 'GET', body } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+
+  let res;
+  try {
+    res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  } catch {
+    throw new Error("Can't reach the server.");
+  }
+  const data = await res.json().catch(() => ({}));
+
+  if (res.status === 401 && token) {
+    clearSession();
+    location.reload();
+    throw new Error('Please log in again.');
+  }
+  if (!res.ok) throw new Error(data.message || 'Something went wrong.');
+  return data;
 }
 
-document.getElementById('loginBtn').addEventListener('click', async () => {
-  const email = document.getElementById('loginEmail').value;
-  const password = document.getElementById('loginPassword').value;
-  const res = await fetch('/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email, password }) });
-  const data = await res.json();
-  if (!data.success) { document.getElementById('loginMsg').textContent = data.message; return; }
-  if (data.user.role !== 'manager') { document.getElementById('loginMsg').textContent = 'This account is not a manager.'; return; }
-  currentManager = data.user;
-  localStorage.setItem('manager', JSON.stringify(data.user));
-  document.getElementById('loginSection').style.display = 'none';
-  document.getElementById('dashboardSection').style.display = 'block';
-  init();
-});
+function clearSession() {
+  token = null;
+  currentManager = null;
+  localStorage.removeItem('managerSession');
+}
 
-document.getElementById('logoutBtn').addEventListener('click', () => {
-  localStorage.removeItem('manager');
+function restoreSession() {
+  localStorage.removeItem('manager'); // leftover from the very first version
+  try {
+    const saved = JSON.parse(localStorage.getItem('managerSession'));
+    if (saved && saved.token && saved.user) {
+      token = saved.token;
+      currentManager = saved.user;
+    }
+  } catch { /* ignore broken saved data */ }
+}
+
+// ---------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function fmtTime(ts) { return new Date(ts).toLocaleString([], { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
+function fmtDate(s) { return new Date(s + 'T00:00:00').toLocaleDateString([], { month:'short', day:'numeric', year:'numeric' }); }
+function fmtDuration(ms) {
+  const mins = Math.max(0, Math.round(ms / 60000));
+  return Math.floor(mins / 60) + 'h ' + String(mins % 60).padStart(2, '0') + 'm';
+}
+const pad = n => String(n).padStart(2, '0');
+// Converts a timestamp to the "2026-10-05T14:30" format that datetime-local inputs use (local time)
+function toLocalInput(ts) {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function fromLocalInput(value) { return value ? new Date(value).getTime() : NaN; }
+function toDateInput(d) { return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function firstName(name) { return String(name || '').trim().split(/\s+/)[0]; }
+
+// Briefly changes a button's text so you can tell a click worked
+function flash(btn, text) {
+  const original = btn.dataset.label || btn.textContent;
+  btn.dataset.label = original;
+  btn.textContent = text;
+  setTimeout(() => { btn.textContent = original; }, 1800);
+}
+
+function makeRow(html) {
+  const div = document.createElement('div');
+  div.className = 'row';
+  div.innerHTML = html;
+  return div;
+}
+
+// Little number bubble next to a section title (hidden when 0)
+function setCount(id, n) {
+  $(id).hidden = !n;
+  $(id).textContent = n;
+}
+
+function showError(err) { $('pageMsg').textContent = err.message; }
+
+// ---------------------------------------------------------------
+// Login / logout
+// ---------------------------------------------------------------
+async function login() {
+  $('loginMsg').textContent = '';
+  $('loginBtn').disabled = true;
+  try {
+    const data = await api('/login', {
+      method: 'POST',
+      body: { email: $('loginEmail').value, password: $('loginPassword').value }
+    });
+    if (data.user.role !== 'manager') {
+      // Not a manager: end the session we just got and say so
+      token = data.token;
+      await api('/logout', { method: 'POST', body: {} }).catch(() => {});
+      token = null;
+      $('loginMsg').textContent = "This account isn't a manager. Employees log in on the main page.";
+      return;
+    }
+    token = data.token;
+    currentManager = data.user;
+    localStorage.setItem('managerSession', JSON.stringify({ token, user: data.user }));
+    showDashboard();
+  } catch (err) {
+    $('loginMsg').textContent = err.message;
+  } finally {
+    $('loginBtn').disabled = false;
+  }
+}
+$('loginBtn').addEventListener('click', login);
+$('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+$('logoutBtn').addEventListener('click', async () => {
+  await api('/logout', { method: 'POST', body: {} }).catch(() => {});
+  clearSession();
   location.reload();
 });
 
-function fmtTime(ts){ return new Date(ts).toLocaleString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'}); }
-function empName(id){ const e = employees.find(x => x.id === id); return e ? e.name : 'Unknown (#' + id + ')'; }
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-async function loadCompanies(){
-  const companies = await fetch('/companies').then(r => r.json());
-  const sel = document.getElementById('companySelect');
+// ---------------------------------------------------------------
+// Company picker
+// ---------------------------------------------------------------
+async function loadCompanies() {
+  const companies = await api('/companies');
+  const sel = $('companySelect');
   sel.innerHTML = companies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  currentCompany = companies[0];
-  sel.addEventListener('change', () => { currentCompany = sel.value; loadAll(); });
-}
-
-async function loadPayRates(){
-  employees = await fetch('/employees?company=' + encodeURIComponent(currentCompany)).then(r => r.json());
-  const list = document.getElementById('payRateList');
-  list.innerHTML = employees.length === 0 ? '<div class="empty">No employees yet in this company.</div>' : '';
-  employees.forEach(emp => {
-    const div = document.createElement('div');
-    div.className = 'row';
-    div.innerHTML = `<div class="who">${escapeHtml(emp.name)}</div>
-      <div style="display:flex; align-items:center; gap:8px;">
-        <input type="number" step="0.01" value="${emp.hourlyRate}" style="width:90px; padding:7px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
-        <button class="btn">Save rate</button>
-      </div>`;
-    const input = div.querySelector('input');
-    div.querySelector('button').addEventListener('click', async () => {
-      await fetch('/set-rate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ employeeId: emp.id, hourlyRate: Number(input.value), managerId: currentManager.id }) });
-    });
-    list.appendChild(div);
+  // Remember the last company picked so a refresh doesn't jump back to the first one
+  const last = localStorage.getItem('managerCompany');
+  currentCompany = companies.includes(last) ? last : companies[0];
+  sel.value = currentCompany;
+  sel.addEventListener('change', () => {
+    currentCompany = sel.value;
+    localStorage.setItem('managerCompany', currentCompany);
+    loadAll();
   });
 }
+const companyParam = () => 'company=' + encodeURIComponent(currentCompany);
 
-async function loadSites(){
-  const rows = await fetch('/sites?company=' + encodeURIComponent(currentCompany)).then(r => r.json());
-  const list = document.getElementById('sitesList');
-  list.innerHTML = rows.length === 0 ? '<div class="empty">No sites yet for this company.</div>' : '';
-  rows.forEach(s => {
-    const div = document.createElement('div');
-    div.className = 'row';
-    div.innerHTML = `<div><div class="who">${escapeHtml(s.name)}</div><div class="sub">${s.lat}, ${s.lng} &middot; ${s.radiusMeters}m</div></div><button class="btn deny">Remove</button>`;
-    div.querySelector('button').addEventListener('click', async () => {
-      await fetch('/sites/' + s.id + '?managerId=' + currentManager.id, { method:'DELETE' });
-      loadSites();
-    });
-    list.appendChild(div);
-  });
-}
-
-document.getElementById('addSiteBtn').addEventListener('click', async () => {
-  const name = document.getElementById('siteName').value;
-  const lat = Number(document.getElementById('siteLat').value);
-  const lng = Number(document.getElementById('siteLng').value);
-  const radiusMeters = Number(document.getElementById('siteRadius').value);
-  if (!name || !lat || !lng) return;
-  await fetch('/sites', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ company: currentCompany, name, lat, lng, radiusMeters, managerId: currentManager.id }) });
-  document.getElementById('siteName').value = '';
-  document.getElementById('siteLat').value = '';
-  document.getElementById('siteLng').value = '';
-  loadSites();
-});
-
-async function loadEntries(){
-  const rows = await fetch('/pending-entries?company=' + encodeURIComponent(currentCompany)).then(r => r.json());
-  const list = document.getElementById('entriesList');
-  list.innerHTML = rows.length === 0 ? '<div class="empty">Nothing waiting on approval.</div>' : '';
+// ---------------------------------------------------------------
+// On the clock now (fix forgotten clock-outs)
+// ---------------------------------------------------------------
+async function loadOpen() {
+  const rows = await api('/open-entries?' + companyParam());
+  setCount('openCount', rows.length);
+  const list = $('openList');
+  list.innerHTML = rows.length === 0 ? '<div class="empty">Nobody is clocked in right now.</div>' : '';
   rows.forEach(e => {
-    const div = document.createElement('div');
-    div.className = 'row';
-    div.innerHTML = `
+    const div = makeRow(`
       <div>
-        <div class="who">${escapeHtml(empName(e.employeeId))}</div>
-        <div class="sub">${fmtTime(e.clockIn)} &ndash; ${fmtTime(e.clockOut)}</div>
-      </div>
-      <button class="btn approve">Approve</button>`;
-    div.querySelector('button').addEventListener('click', async () => {
-      await fetch('/approve-entry', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ entryId: e.id, managerId: currentManager.id }) });
-      loadEntries();
-    });
-    list.appendChild(div);
-  });
-}
-
-async function loadPto(){
-  const rows = await fetch('/pto-requests?status=pending&company=' + encodeURIComponent(currentCompany)).then(r => r.json());
-  const list = document.getElementById('ptoList');
-  list.innerHTML = rows.length === 0 ? '<div class="empty">No pending time-off requests.</div>' : '';
-  rows.forEach(p => {
-    const div = document.createElement('div');
-    div.className = 'row';
-    div.innerHTML = `
-      <div>
-        <div class="who">${escapeHtml(empName(p.employeeId))}</div>
-        <div class="sub">${p.startDate} &ndash; ${p.endDate}${p.reason ? ' &middot; ' + escapeHtml(p.reason) : ''}</div>
+        <div class="who">${escapeHtml(e.employeeName)}</div>
+        <div class="sub">Since ${fmtTime(e.clockIn)}${e.site ? ' at ' + escapeHtml(e.site) : ''} (${fmtDuration(Date.now() - e.clockIn)})</div>
       </div>
       <div class="actions">
-        <button class="btn approve">Approve</button>
-        <button class="btn deny">Deny</button>
-      </div>`;
-    const [approveBtn, denyBtn] = div.querySelectorAll('button');
+        <input class="field inline" type="datetime-local" value="${toLocalInput(Date.now())}" aria-label="Clock-out time">
+        <button class="btn ghost">Clock out at this time</button>
+      </div>
+      <div class="msg" style="width:100%; margin:0;"></div>`);
+    const input = div.querySelector('input');
+    const msg = div.querySelector('.msg');
+    div.querySelector('button').addEventListener('click', async () => {
+      try {
+        await api('/update-entry', { method: 'POST', body: { entryId: e.id, clockIn: e.clockIn, clockOut: fromLocalInput(input.value) } });
+        loadOpen();
+        loadEntries();
+      } catch (err) { msg.textContent = err.message; }
+    });
+    list.appendChild(div);
+  });
+}
+
+// ---------------------------------------------------------------
+// Timesheets awaiting approval (with editable times)
+// ---------------------------------------------------------------
+async function loadEntries() {
+  const rows = await api('/pending-entries?' + companyParam());
+  setCount('entriesCount', rows.length);
+  const list = $('entriesList');
+  list.innerHTML = rows.length === 0 ? '<div class="empty">All caught up. Nothing waiting on approval.</div>' : '';
+  rows.forEach(e => {
+    const div = makeRow(`
+      <div>
+        <div class="who">${escapeHtml(e.employeeName)}</div>
+        <div class="sub">${fmtTime(e.clockIn)} – ${fmtTime(e.clockOut)}${e.site ? ' at ' + escapeHtml(e.site) : ''}</div>
+      </div>
+      <div class="actions">
+        <span class="dur">${fmtDuration(e.clockOut - e.clockIn)}</span>
+        <button class="btn ghost small" data-act="edit">Edit times</button>
+        <button class="btn primary small" data-act="approve">Approve</button>
+      </div>
+      <div class="editor">
+        <label>Clock in <input class="field inline" type="datetime-local" data-f="in" value="${toLocalInput(e.clockIn)}"></label>
+        <label>Clock out <input class="field inline" type="datetime-local" data-f="out" value="${toLocalInput(e.clockOut)}"></label>
+        <button class="btn primary small" data-act="save">Save times</button>
+      </div>
+      <div class="msg" style="width:100%; margin:0;"></div>`);
+
+    const editor = div.querySelector('.editor');
+    const msg = div.querySelector('.msg');
+
+    div.querySelector('[data-act="edit"]').addEventListener('click', () => editor.classList.toggle('open'));
+
+    div.querySelector('[data-act="save"]').addEventListener('click', async () => {
+      try {
+        await api('/update-entry', {
+          method: 'POST',
+          body: {
+            entryId: e.id,
+            clockIn: fromLocalInput(div.querySelector('[data-f="in"]').value),
+            clockOut: fromLocalInput(div.querySelector('[data-f="out"]').value)
+          }
+        });
+        loadEntries();
+      } catch (err) { msg.textContent = err.message; }
+    });
+
+    div.querySelector('[data-act="approve"]').addEventListener('click', async () => {
+      try {
+        await api('/approve-entry', { method: 'POST', body: { entryId: e.id } });
+        loadEntries();
+      } catch (err) { msg.textContent = err.message; }
+    });
+
+    list.appendChild(div);
+  });
+}
+
+// ---------------------------------------------------------------
+// Time-off requests
+// ---------------------------------------------------------------
+async function loadPto() {
+  const rows = await api('/pto-requests?status=pending&' + companyParam());
+  setCount('ptoCount', rows.length);
+  const list = $('ptoList');
+  list.innerHTML = rows.length === 0 ? '<div class="empty">No pending time-off requests.</div>' : '';
+  rows.forEach(p => {
+    const range = p.startDate === p.endDate ? fmtDate(p.startDate) : fmtDate(p.startDate) + ' – ' + fmtDate(p.endDate);
+    const div = makeRow(`
+      <div>
+        <div class="who">${escapeHtml(p.employeeName)}</div>
+        <div class="sub">${range}</div>
+        ${p.reason ? `<div class="sub">${escapeHtml(p.reason)}</div>` : ''}
+      </div>
+      <div class="actions">
+        <button class="btn danger small">Deny</button>
+        <button class="btn primary small">Approve</button>
+      </div>`);
+    const [denyBtn, approveBtn] = div.querySelectorAll('button');
     approveBtn.addEventListener('click', () => decide(p.id, 'approved'));
     denyBtn.addEventListener('click', () => decide(p.id, 'denied'));
     list.appendChild(div);
   });
 }
 
-async function decide(requestId, decision){
-  await fetch('/pto-decision', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ requestId, decision, managerId: currentManager.id }) });
-  loadPto();
+async function decide(requestId, decision) {
+  try {
+    await api('/pto-decision', { method: 'POST', body: { requestId, decision } });
+    loadPto();
+  } catch (err) { showError(err); }
 }
 
-function loadAll(){
-  loadPayRates();
-  loadSites();
-  loadEntries();
-  loadPto();
+// ---------------------------------------------------------------
+// Password help
+// ---------------------------------------------------------------
+async function loadResetRequests() {
+  const rows = await api('/reset-requests?' + companyParam());
+  setCount('resetCount', rows.length);
+  const list = $('resetList');
+  list.innerHTML = rows.length === 0 ? '<div class="empty">Nobody has asked for a password reset.</div>' : '';
+  rows.forEach(r => {
+    const div = makeRow(`
+      <div>
+        <div class="who">${escapeHtml(r.name)}</div>
+        <div class="sub">${escapeHtml(r.email)}, asked ${fmtTime(r.requestedAt)}</div>
+      </div>
+      <button class="btn primary small">Create reset code</button>`);
+    div.querySelector('button').addEventListener('click', () => createResetCode(r.userId, r.name));
+    list.appendChild(div);
+  });
 }
 
-async function init(){
-  await loadCompanies();
-  loadAll();
+async function createResetCode(userId, name) {
+  try {
+    const data = await api('/reset-code', { method: 'POST', body: { userId } });
+    $('codeFor').textContent = 'Reset code for ' + name;
+    $('codeValue').textContent = data.code;
+    $('codeDialog').showModal();
+    loadResetRequests();
+  } catch (err) { showError(err); }
 }
 
-restoreManagerLogin();
-if (currentManager) init();
-
-document.getElementById('exportAttendance').addEventListener('click', () => {
-  const start = document.getElementById('exportStart').value;
-  const end = document.getElementById('exportEnd').value;
-  window.location.href = `/export/attendance?start=${start}&end=${end}&company=${encodeURIComponent(currentCompany)}`;
+$('copyCodeBtn').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText($('codeValue').textContent);
+    flash($('copyCodeBtn'), 'Copied');
+  } catch {
+    flash($('copyCodeBtn'), 'Copy failed');
+  }
 });
-document.getElementById('exportPayroll').addEventListener('click', () => {
-  const start = document.getElementById('exportStart').value;
-  const end = document.getElementById('exportEnd').value;
-  window.location.href = `/export/payroll?start=${start}&end=${end}&company=${encodeURIComponent(currentCompany)}`;
+$('codeDoneBtn').addEventListener('click', () => $('codeDialog').close());
+
+// ---------------------------------------------------------------
+// Employees, pay rates, device resets, password codes
+// ---------------------------------------------------------------
+async function loadEmployees() {
+  const rows = await api('/employees?' + companyParam());
+  const list = $('payRateList');
+  list.innerHTML = rows.length === 0 ? '<div class="empty">No employees in this company yet. They sign up on the main page.</div>' : '';
+  rows.forEach(emp => {
+    const devices = emp.deviceCount === 1 ? '1 device' : emp.deviceCount + ' devices';
+    const div = makeRow(`
+      <div>
+        <div class="who">${escapeHtml(emp.name)}</div>
+        <div class="sub">${escapeHtml(emp.email)}</div>
+        <div class="sub">Logged in on ${devices}</div>
+      </div>
+      <div class="actions">
+        <label class="sub" style="display:flex; align-items:center; gap:6px;">$/hr
+          <input class="field inline rate" type="number" step="0.01" min="0" value="${Number(emp.hourlyRate) || 0}">
+        </label>
+        <button class="btn primary small" data-act="rate">Save rate</button>
+        <button class="btn ghost small" data-act="devices">Reset devices</button>
+        <button class="btn ghost small" data-act="code">Password code</button>
+      </div>`);
+
+    const rateBtn = div.querySelector('[data-act="rate"]');
+    rateBtn.addEventListener('click', async () => {
+      try {
+        await api('/set-rate', { method: 'POST', body: { employeeId: emp.id, hourlyRate: Number(div.querySelector('input').value) } });
+        flash(rateBtn, 'Saved ✓');
+      } catch (err) { flash(rateBtn, err.message); }
+    });
+
+    div.querySelector('[data-act="devices"]').addEventListener('click', async () => {
+      if (!confirm(`Reset devices for ${emp.name}? They'll be logged out everywhere and can then log in on up to 2 devices.`)) return;
+      try {
+        await api('/reset-devices', { method: 'POST', body: { employeeId: emp.id } });
+        loadEmployees();
+      } catch (err) { showError(err); }
+    });
+
+    div.querySelector('[data-act="code"]').addEventListener('click', () => createResetCode(emp.id, emp.name));
+
+    list.appendChild(div);
+  });
+}
+
+// ---------------------------------------------------------------
+// Work sites
+// ---------------------------------------------------------------
+async function loadSites() {
+  const rows = await api('/sites?' + companyParam());
+  const list = $('sitesList');
+  list.innerHTML = rows.length === 0 ? '<div class="empty">No sites yet. Nobody in this company can clock in until you add one.</div>' : '';
+  rows.forEach(s => {
+    const div = makeRow(`
+      <div>
+        <div class="who">${escapeHtml(s.name)}</div>
+        <div class="sub">${s.lat}, ${s.lng}, ${s.radiusMeters} m radius</div>
+      </div>
+      <button class="btn danger small">Remove</button>`);
+    div.querySelector('button').addEventListener('click', async () => {
+      if (!confirm(`Remove ${s.name}? Employees won't be able to clock in there anymore.`)) return;
+      try {
+        await api('/sites/' + s.id, { method: 'DELETE' });
+        loadSites();
+      } catch (err) { showError(err); }
+    });
+    list.appendChild(div);
+  });
+}
+
+$('useLocationBtn').addEventListener('click', () => {
+  const msg = $('siteMsg');
+  if (!navigator.geolocation) { msg.textContent = "This browser can't share your location."; return; }
+  msg.className = 'msg ok';
+  msg.textContent = 'Finding your location…';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      $('siteLat').value = pos.coords.latitude.toFixed(6);
+      $('siteLng').value = pos.coords.longitude.toFixed(6);
+      msg.textContent = 'Location filled in (accurate to about ' + Math.round(pos.coords.accuracy) + ' m).';
+    },
+    () => { msg.className = 'msg'; msg.textContent = 'Could not get your location. Check location permissions.'; },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
 });
 
+$('addSiteBtn').addEventListener('click', async () => {
+  const msg = $('siteMsg');
+  msg.className = 'msg';
+  const name = $('siteName').value.trim();
+  const latText = $('siteLat').value;
+  const lngText = $('siteLng').value;
+  if (!name || latText === '' || lngText === '') {
+    msg.textContent = 'Fill in the site name, latitude and longitude.';
+    return;
+  }
+  try {
+    await api('/sites', {
+      method: 'POST',
+      body: { company: currentCompany, name, lat: Number(latText), lng: Number(lngText), radiusMeters: Number($('siteRadius').value) }
+    });
+    $('siteName').value = '';
+    $('siteLat').value = '';
+    $('siteLng').value = '';
+    msg.textContent = '';
+    loadSites();
+  } catch (err) { msg.textContent = err.message; }
+});
+
+// ---------------------------------------------------------------
+// Exports
+// ---------------------------------------------------------------
+// Downloads go through fetch (so the login token is sent), then get saved as a file.
+async function downloadCsv(path, kind) {
+  const msg = $('exportMsg');
+  msg.textContent = '';
+  const start = $('exportStart').value;
+  const end = $('exportEnd').value;
+
+  const params = new URLSearchParams({
+    company: currentCompany,
+    tz: Intl.DateTimeFormat().resolvedOptions().timeZone // so times in the file match this computer's clock
+  });
+  // Start/end of the chosen days in THIS computer's timezone, not the server's
+  if (start) params.set('startMs', new Date(start + 'T00:00:00').getTime());
+  if (end) params.set('endMs', new Date(end + 'T23:59:59.999').getTime());
+
+  try {
+    const res = await fetch(path + '?' + params, { headers: { Authorization: 'Bearer ' + token } });
+    if (res.status === 401) { clearSession(); location.reload(); return; }
+    if (!res.ok) throw new Error('Export failed.');
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${kind} ${currentCompany} ${start || 'start'} to ${end || 'today'}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+}
+$('exportAttendance').addEventListener('click', () => downloadCsv('/export/attendance', 'attendance'));
+$('exportPayroll').addEventListener('click', () => downloadCsv('/export/payroll', 'payroll'));
+
+// Default the export range to the last two weeks
+(function setDefaultExportDates() {
+  const today = new Date();
+  const twoWeeksAgo = new Date(today);
+  twoWeeksAgo.setDate(today.getDate() - 13);
+  $('exportStart').value = toDateInput(twoWeeksAgo);
+  $('exportEnd').value = toDateInput(today);
+})();
+
+// ---------------------------------------------------------------
+// Start up
+// ---------------------------------------------------------------
+async function loadAll() {
+  $('pageMsg').textContent = '';
+  try {
+    await Promise.all([loadOpen(), loadEntries(), loadPto(), loadResetRequests(), loadEmployees(), loadSites()]);
+  } catch (err) {
+    showError(err);
+  }
+}
+
+async function showDashboard() {
+  $('loginSection').hidden = true;
+  $('dashboardSection').hidden = false;
+  $('logoutBtn').hidden = false;
+  $('hello').textContent = 'Hi, ' + firstName(currentManager.name);
+  $('todayLabel').textContent = new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' });
+  try {
+    await loadCompanies();
+    loadAll();
+  } catch (err) { showError(err); }
+}
+
+restoreSession();
+if (token) showDashboard(); else $('loginSection').hidden = false;
 </script>
 </body>
 </html>

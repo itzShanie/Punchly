@@ -3,483 +3,748 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="author" content="Shanan">
 <title>Time Clock</title>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-  :root{
-    --bg:#1C2024; --card:#262B31; --line:#383F47;
-    --amber:#E8A33D; --green:#4CAF6D; --red:#D9695F;
-    --text:#F2F0EA; --muted:#9AA4AF;
-    box-sizing:border-box;
-  }
-  *{box-sizing:border-box;}
-  body{
-    background:var(--bg); color:var(--text); font-family:'Space Grotesk',sans-serif;
-    display:flex; flex-direction:column; align-items:center; padding:32px 16px 48px; margin:0;
-  }
-  .clock{ font-family:'IBM Plex Mono',monospace; font-size:clamp(2.4rem,7vw,3.6rem); }
-  .date{ color:var(--muted); font-size:0.9rem; }
-  .panel{ width:100%; max-width:680px; margin-top:30px; }
-  .section-head{ display:flex; justify-content:space-between; align-items:baseline; margin:30px 0 12px; }
-  .section-head h2{ font-size:0.95rem; font-weight:500; color:var(--muted); margin:0; }
-  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:12px; }
-  .tile{
-    background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 12px;
-    text-align:left; cursor:pointer; color:var(--text); font-family:inherit; font-size:1rem;
-    display:flex; flex-direction:column; gap:6px;
-  }
-  .tile.on{ border-color:rgba(76,175,109,0.4); }
-  .status{ font-size:0.8rem; color:var(--muted); display:flex; align-items:center; gap:6px; }
-  .dot{ width:8px; height:8px; border-radius:50%; background:var(--muted); }
-  .tile.on .status{ color:var(--green); }
-  .tile.on .dot{ background:var(--green); }
-  .log-row, .sum-row{
-    background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 14px;
-    display:flex; justify-content:space-between; gap:12px; font-size:0.9rem; margin-bottom:8px;
-  }
-  .times{ font-family:'IBM Plex Mono',monospace; color:var(--muted); font-size:0.82rem; }
-  .dur{ font-family:'IBM Plex Mono',monospace; color:var(--amber); }
-  .empty{ color:var(--muted); font-size:0.9rem; }
-  dialog{ background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:12px; padding:24px; width:min(90vw,340px); font-family:inherit; }
-  dialog::backdrop{ background:rgba(0,0,0,0.5); }
-  .dialog-actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
-  .btn{ padding:9px 16px; border-radius:8px; border:1px solid var(--line); cursor:pointer; font-family:inherit; background:transparent; color:var(--text); }
-  .btn.primary{ background:var(--amber); border-color:var(--amber); color:#1C2024; font-weight:500; }
-  .btn.danger{ background:var(--red); border-color:var(--red); color:#1C2024; font-weight:500; }
-  .msg{ font-size:0.85rem; color:var(--red); min-height:1.2em; margin-top:6px; }
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- Leaflet: free map library, map pictures come from OpenStreetMap -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="style.css">
+<script src="theme.js"></script>
 </head>
 <body>
 
-  <div id="authSection" class="panel">
-
-  <h2>Login</h2>
-
-  <input id="loginEmail"
-         placeholder="Email"
-         style="width:100%;padding:10px;margin-bottom:10px;">
-
-  <input id="loginPassword"
-         type="password"
-         placeholder="Password"
-         style="width:100%;padding:10px;margin-bottom:10px;">
-
-  <button class="btn primary" id="loginBtn">
-    Login
-  </button>
-
-  <hr style="margin:20px 0;">
-
-  <h2>Create Account</h2>
-
-  <select id="registerCompany"
-          style="width:100%;padding:10px;margin-bottom:10px;">
-
-    <option>Company A</option>
-    <option>Company B</option>
-    <option>Company C</option>
-    <option>Company D</option>
-
-  </select>
-
-  <input id="registerName"
-         placeholder="Name"
-         style="width:100%;padding:10px;margin-bottom:10px;">
-
-  <input id="registerEmail"
-         placeholder="Email"
-         style="width:100%;padding:10px;margin-bottom:10px;">
-
-  <input id="registerPassword"
-         type="password"
-         placeholder="Password"
-         style="width:100%;padding:10px;margin-bottom:10px;">
-
-  <button class="btn primary" id="registerBtn">
-    Create Account
-  </button>
-
-  <div id="authMsg" class="msg"></div>
-
-</div>
- 
-<div class="date" id="dateLabel"></div>
-<div class="clock" id="liveClock">--:--:--</div>
- 
-<div class="panel" id="appSection" style="display:none;">
-  <div class="section-head"><h2>My time clock
-  <div class="grid" id="employeeGrid"></div>
-
-
-  <button class="btn" style="margin-top:14px;" onclick="document.getElementById('ptoDialog').showModal()">Request time off</button>
-
-  <button class="btn" id="logoutBtn">
-  Logout
- </button>
-
-<dialog id="ptoDialog">
-  <div style="font-size:1.1rem; margin-bottom:14px;">Request time off</div>
-  <select id="ptoEmployee" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;"></select>
-  <input type="date" id="ptoStart" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
-  <input type="date" id="ptoEnd" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
-  <input type="text" id="ptoReason" placeholder="Reason (optional)" style="width:100%; padding:10px; margin-bottom:10px; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:8px;">
-  <div class="msg" id="ptoMsg"></div>
-  <div class="dialog-actions">
-    <button class="btn" onclick="document.getElementById('ptoDialog').close()">Cancel</button>
-    <button class="btn primary" id="ptoSubmit">Submit</button>
+<header class="topbar">
+  <div class="brand">
+    <svg viewBox="0 0 40 40" aria-hidden="true">
+      <defs>
+        <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#2EC4B6"/>
+          <stop offset="1" stop-color="#8CC8F5"/>
+        </linearGradient>
+      </defs>
+      <rect width="40" height="40" rx="12" fill="url(#brandGrad)"/>
+      <circle cx="20" cy="21" r="10.5" fill="none" stroke="#fff" stroke-width="2.6"/>
+      <path d="M20 15v6l4.2 2.8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="31.5" cy="8.5" r="4.2" fill="#F48FBF" stroke="#fff" stroke-width="2"/>
+    </svg>
+    <span>Time Clock</span>
   </div>
-</dialog>
- 
-  <div class="section-head"><h2>Today's log</h2></div>
-  <div id="logList"></div>
- 
-  <div class="section-head"><h2>Total hours logged</h2></div>
-  <div id="summaryList"></div>
-</div>
- 
+  <div class="topbar-actions">
+    <button class="icon-btn" data-theme-toggle></button>
+    <button class="btn ghost small" id="logoutBtn" hidden>Log out</button>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- ============ Logged out: log in / sign up / forgot password ============ -->
+  <section id="authSection" hidden>
+    <div style="margin:14px 0 20px;">
+      <h1 id="authTitle">Welcome back</h1>
+      <p class="muted" id="authSubtitle">Log in to clock in and out.</p>
+    </div>
+
+    <div class="card" id="loginCard">
+      <label class="label" for="loginEmail">Email</label>
+      <input class="field" id="loginEmail" type="email" autocomplete="username">
+      <label class="label" for="loginPassword">Password</label>
+      <input class="field" id="loginPassword" type="password" autocomplete="current-password">
+      <button class="btn primary block big" id="loginBtn">Log in</button>
+      <div class="msg" id="loginMsg"></div>
+      <div class="card-links">
+        <button class="link" data-show="forgot">Forgot password?</button>
+        <span>New here? <button class="link" data-show="register">Create an account</button></span>
+      </div>
+    </div>
+
+    <div class="card" id="registerCard" hidden>
+      <label class="label" for="registerCompany">Company</label>
+      <select class="field" id="registerCompany"></select>
+      <label class="label" for="registerName">Full name</label>
+      <input class="field" id="registerName" autocomplete="name">
+      <label class="label" for="registerEmail">Email</label>
+      <input class="field" id="registerEmail" type="email" autocomplete="email">
+      <label class="label" for="registerPassword">Password</label>
+      <input class="field" id="registerPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password">
+      <button class="btn primary block big" id="registerBtn">Create account</button>
+      <div class="msg" id="registerMsg"></div>
+      <div class="card-links">
+        <span>Already have an account? <button class="link" data-show="login">Log in</button></span>
+      </div>
+    </div>
+
+    <div class="card" id="forgotCard" hidden>
+      <p class="muted small card-intro">Your manager gives out reset codes. Ask for one below, then enter it here once you have it.</p>
+      <label class="label" for="forgotEmail">Email</label>
+      <input class="field" id="forgotEmail" type="email" autocomplete="username">
+      <button class="btn ghost block" id="forgotRequestBtn">Ask my manager for a code</button>
+      <div class="msg" id="forgotRequestMsg"></div>
+
+      <div style="border-top:1px solid var(--line); margin:20px 0 18px;"></div>
+
+      <label class="label" for="resetCode">Reset code</label>
+      <input class="field code-input" id="resetCode" placeholder="ABCD-EFGH" autocomplete="one-time-code">
+      <label class="label" for="resetPassword">New password</label>
+      <input class="field" id="resetPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password">
+      <button class="btn primary block" id="resetBtn">Set new password</button>
+      <div class="msg" id="resetMsg"></div>
+      <div class="card-links">
+        <button class="link" data-show="login">Back to log in</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Logged in ============ -->
+  <section id="appSection" hidden>
+    <div class="hello">
+      <div>
+        <h1 id="greeting">Hello</h1>
+        <p class="muted" id="dateLabel"></p>
+      </div>
+      <div class="clock" id="liveClock">--:--</div>
+    </div>
+
+    <div class="card status" id="statusCard">
+      <div class="status-line"><span class="dot"></span><span id="statusText">Loading…</span></div>
+      <div class="elapsed" id="elapsed" hidden></div>
+      <button class="btn primary block big" id="clockBtn" disabled>Clock in</button>
+      <div class="msg" id="clockMsg"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Where you are</h2>
+        <button class="btn ghost small" id="locateBtn">Update</button>
+      </div>
+      <div id="map" class="map"></div>
+      <div class="loc-status" id="locStatus">Finding your location…</div>
+    </div>
+
+    <div class="section-head"><h2>Today</h2></div>
+    <div id="logList"></div>
+
+    <div class="section-head"><h2>Total hours</h2></div>
+    <div id="summaryList"></div>
+
+    <div class="section-head">
+      <h2>Time off</h2>
+      <button class="btn ghost small" id="ptoOpen">Request time off</button>
+    </div>
+    <div id="ptoList"></div>
+  </section>
+
+</main>
+
+<footer class="credit">Made with care by Shanan <span class="heart" aria-hidden="true">♥</span></footer>
+
+<!-- Confirm clock in / out (stops accidental taps) -->
 <dialog id="confirmDialog">
-  <div id="confirmName" style="font-size:1.1rem;"></div>
-  <div id="confirmSub" style="color:var(--muted); font-size:0.88rem; margin-top:4px;"></div>
+  <div class="dialog-title" id="confirmTitle"></div>
   <div class="msg" id="confirmMsg"></div>
   <div class="dialog-actions">
-    <button class="btn" id="confirmCancel">Cancel</button>
+    <button class="btn ghost" id="confirmCancel">Cancel</button>
     <button class="btn primary" id="confirmOk">Confirm</button>
   </div>
 </dialog>
- 
+
+<!-- Request time off -->
+<dialog id="ptoDialog">
+  <div class="dialog-title">Request time off</div>
+  <label class="label" for="ptoStart">First day off</label>
+  <input class="field" type="date" id="ptoStart">
+  <label class="label" for="ptoEnd">Last day off</label>
+  <input class="field" type="date" id="ptoEnd">
+  <label class="label" for="ptoReason">Reason (optional)</label>
+  <input class="field" type="text" id="ptoReason" maxlength="500">
+  <div class="msg" id="ptoMsg"></div>
+  <div class="dialog-actions">
+    <button class="btn ghost" id="ptoCancel">Cancel</button>
+    <button class="btn primary" id="ptoSubmit">Send request</button>
+  </div>
+</dialog>
+
 <script>
-// Same-origin server, so requests can just use relative paths like '/employees'
-let employees = [];
-let entries = [];
-let pendingEmpId = null;
+// ---------------------------------------------------------------
+// State
+// ---------------------------------------------------------------
+let token = null;       // proves to the server who we are (from /login)
 let currentUser = null;
+let myEntries = [];
+let openEntry = null;   // the shift we're currently clocked into, if any
+let mySites = [];       // this company's work sites, for the map
+let lastPos = null;     // { latitude, longitude, accuracy } from the last location check
 
 // Identifies THIS browser/device, generated once and kept forever in localStorage —
 // this is what lets the server count how many different devices an employee has logged in from.
 let deviceId = localStorage.getItem('deviceId');
 if (!deviceId) {
-  deviceId = crypto.randomUUID();
+  // randomUUID only exists on https or localhost, so fall back for plain http (like testing on your phone over Wi-Fi)
+  deviceId = (window.crypto && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
   localStorage.setItem('deviceId', deviceId);
 }
- 
-function tickClock(){
+
+const $ = id => document.getElementById(id);
+
+// ---------------------------------------------------------------
+// Talking to the server
+// ---------------------------------------------------------------
+// One helper for every request: adds the login token, turns errors into readable messages.
+async function api(path, { method = 'GET', body } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = 'Bearer ' + token;
+
+  let res;
+  try {
+    res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  } catch {
+    throw new Error("Can't reach the server. Check your internet connection.");
+  }
+
+  const data = await res.json().catch(() => ({}));
+
+  if (res.status === 401 && token) {
+    // Our login expired or was reset: go back to the login screen.
+    clearSession();
+    showAuth();
+    throw new Error(data.message || 'Please log in again.');
+  }
+  if (!res.ok) throw new Error(data.message || 'Something went wrong.');
+  return data;
+}
+
+function saveSession(newToken, user) {
+  token = newToken;
+  currentUser = user;
+  localStorage.setItem('session', JSON.stringify({ token, user }));
+}
+
+function clearSession() {
+  token = null;
+  currentUser = null;
+  localStorage.removeItem('session');
+}
+
+function restoreSession() {
+  localStorage.removeItem('user'); // leftover from the very first version
+  try {
+    const saved = JSON.parse(localStorage.getItem('session'));
+    if (saved && saved.token && saved.user) {
+      token = saved.token;
+      currentUser = saved.user;
+    }
+  } catch { /* ignore broken saved data */ }
+}
+
+// ---------------------------------------------------------------
+// Formatting helpers
+// ---------------------------------------------------------------
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+}
+function fmtTime(ts) { return new Date(ts).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }); }
+function fmtDate(s) { return new Date(s + 'T00:00:00').toLocaleDateString([], { month:'short', day:'numeric' }); }
+function sameDay(a, b) { return new Date(a).toDateString() === new Date(b).toDateString(); }
+function fmtDuration(ms) {
+  const mins = Math.max(0, Math.round(ms / 60000));
+  return Math.floor(mins / 60) + 'h ' + String(mins % 60).padStart(2, '0') + 'm';
+}
+function fmtElapsed(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const pad = n => String(n).padStart(2, '0');
+  return Math.floor(s / 3600) + ':' + pad(Math.floor(s / 60) % 60) + ':' + pad(s % 60);
+}
+function fmtDistance(m) { return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m'; }
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function firstName(name) { return String(name || '').trim().split(/\s+/)[0]; }
+function greetingFor(d) {
+  const h = d.getHours();
+  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+}
+
+// Same distance math the server uses, so the map and the server agree
+function distanceMeters(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = deg => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+// ---------------------------------------------------------------
+// Screens
+// ---------------------------------------------------------------
+const AUTH_TEXT = {
+  login:    ['Welcome back', 'Log in to clock in and out.'],
+  register: ['Create your account', 'You only have to do this once.'],
+  forgot:   ['Reset your password', "It happens. Let's get you back in."]
+};
+
+function showCard(name) {
+  ['login', 'register', 'forgot'].forEach(n => { $(n + 'Card').hidden = n !== name; });
+  $('authTitle').textContent = AUTH_TEXT[name][0];
+  $('authSubtitle').textContent = AUTH_TEXT[name][1];
+  if (name === 'forgot' && !$('forgotEmail').value) $('forgotEmail').value = $('loginEmail').value;
+}
+document.querySelectorAll('[data-show]').forEach(btn => btn.addEventListener('click', () => showCard(btn.dataset.show)));
+
+function showAuth() {
+  $('appSection').hidden = true;
+  $('logoutBtn').hidden = true;
+  $('authSection').hidden = false;
+  showCard('login');
+}
+
+function showApp() {
+  $('authSection').hidden = true;
+  $('appSection').hidden = false;
+  $('logoutBtn').hidden = false;
+  tick();
+  loadData();
+  loadSitesAndLocate();
+}
+
+// Live clock, greeting and the "time on the clock" counter — updates every second
+function tick() {
   const now = new Date();
-  document.getElementById('liveClock').textContent = now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
-  document.getElementById('dateLabel').textContent = now.toLocaleDateString([], {weekday:'long', month:'long', day:'numeric'});
+  $('liveClock').textContent = now.toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+  $('dateLabel').textContent = now.toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' });
+  if (currentUser) $('greeting').textContent = greetingFor(now) + ', ' + firstName(currentUser.name);
+  if (openEntry) $('elapsed').textContent = fmtElapsed(Date.now() - openEntry.clockIn);
 }
-tickClock();
-setInterval(tickClock, 1000);
+setInterval(tick, 1000);
 
-function restoreLogin(){
-
-  const saved =
-    localStorage.getItem('user');
-
-  if(!saved)
-    return;
-
-  currentUser = JSON.parse(saved);
-
-  document.getElementById('authSection').style.display = 'none';
-  document.getElementById('appSection').style.display = 'block';
-
+// ---------------------------------------------------------------
+// Loading and showing data
+// ---------------------------------------------------------------
+async function loadData() {
+  try {
+    const [entries, summary, pto] = await Promise.all([
+      api('/my-entries'),
+      api('/my-summary'),
+      api('/my-pto')
+    ]);
+    myEntries = entries;
+    renderStatus();
+    renderToday();
+    renderSummary(summary);
+    renderPto(pto);
+  } catch (err) {
+    $('clockMsg').textContent = err.message;
+  }
 }
 
-function fmtTime(ts){ return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
-function todayKey(ts){ const d = new Date(ts); return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate(); }
-function escapeHtml(s){
-  return String(s).replace(
-    /[&<>"]/g,
-    c => ({
-      '&':'&amp;',
-      '<':'&lt;',
-      '>':'&gt;',
-      '"':'&quot;'
-    }[c])
-  );
+function renderStatus() {
+  openEntry = myEntries.find(e => !e.clockOut) || null;
+  const btn = $('clockBtn');
+
+  $('statusCard').classList.toggle('on', !!openEntry);
+  if (openEntry) {
+    $('statusText').textContent = 'On the clock since ' + fmtTime(openEntry.clockIn) + (openEntry.site ? ' at ' + openEntry.site : '');
+    $('elapsed').hidden = false;
+    $('elapsed').textContent = fmtElapsed(Date.now() - openEntry.clockIn);
+    btn.textContent = 'Clock out';
+    btn.className = 'btn accent block big';
+  } else {
+    $('statusText').textContent = 'Clocked out';
+    $('elapsed').hidden = true;
+    btn.textContent = 'Clock in';
+    btn.className = 'btn primary block big';
+  }
+  btn.disabled = false;
 }
- 
-// fetch() sends a request the same way Thunder Client has been sending them.
-// 'await' pauses this function until the server responds, without freezing the page.
-async function loadData(){
 
-  const allEmployees =
-    await fetch('/employees').then(r => r.json());
-
-  employees = currentUser
-    ? allEmployees.filter(e => e.id === currentUser.id)
-    : [];
-
-  entries = await fetch('/entries').then(r => r.json());
-
-  const summary =
-    await fetch('/summary').then(r => r.json());
-
-  render(summary);
-}
- 
-function activeEntryFor(empId){
-  return entries.find(e => e.employeeId === empId && !e.clockOut);
-}
- 
-function render(summary){
-  const grid = document.getElementById('employeeGrid');
-  grid.innerHTML = '';
-  employees.forEach(emp => {
-    const active = activeEntryFor(emp.id);
-    const tile = document.createElement('button');
-    tile.className = 'tile' + (active ? ' on' : '');
-    tile.innerHTML = `<span>${escapeHtml(emp.name)}</span>
-      <span class="status"><span class="dot"></span>${active ? 'On the clock' : 'Clocked out'}</span>`;
-    tile.addEventListener('click', () => openConfirm(emp.id));
-    grid.appendChild(tile);
-  });
-
-  fillPtoDropdown();
- 
-  const key = todayKey(Date.now());
-  // Filtering by currentUser.id here matters — without it, every employee could see
-  // every other company's punches mixed into their own "today's log."
-  const todays = entries
-    .filter(e => e.employeeId === currentUser.id && todayKey(e.clockIn) === key)
-    .sort((a,b) => b.clockIn - a.clockIn);
-  const logList = document.getElementById('logList');
-  logList.innerHTML = todays.length === 0 ? '<div class="empty">No punches yet today.</div>' : '';
+function renderToday() {
+  const now = Date.now();
+  const todays = myEntries.filter(e => sameDay(e.clockIn, now));
+  const list = $('logList');
+  list.innerHTML = todays.length === 0 ? '<div class="empty">No shifts yet today.</div>' : '';
   todays.forEach(e => {
-    const timesText = e.clockOut ? fmtTime(e.clockIn)+' – '+fmtTime(e.clockOut) : fmtTime(e.clockIn)+' – now';
     const row = document.createElement('div');
-    row.className = 'log-row';
-    row.innerHTML = `<span>${escapeHtml(currentUser.name)}</span><span class="times">${timesText}</span>`;
-    logList.appendChild(row);
-  });
- 
-  const mySummary = summary.filter(s => s.employeeId === currentUser.id);
-  const sumList = document.getElementById('summaryList');
-  sumList.innerHTML = mySummary.length === 0 ? '<div class="empty">No completed shifts yet.</div>' : '';
-  mySummary.forEach(s => {
-    const row = document.createElement('div');
-    row.className = 'sum-row';
-    row.innerHTML = `<span>${escapeHtml(currentUser.name)}</span><span class="dur">${s.hours} hrs</span>`;
-    sumList.appendChild(row);
+    row.className = 'row';
+    const times = fmtTime(e.clockIn) + ' – ' + (e.clockOut ? fmtTime(e.clockOut) : 'now');
+    row.innerHTML = `
+      <div>
+        <div class="who">${times}</div>
+        ${e.site ? `<div class="sub">${escapeHtml(e.site)}</div>` : ''}
+      </div>
+      <span class="dur">${e.clockOut ? fmtDuration(e.clockOut - e.clockIn) : 'In progress'}</span>`;
+    list.appendChild(row);
   });
 }
- 
-// Wraps the browser's geolocation API in a Promise so we can use await with it.
-function getLocation(){
+
+function renderSummary(summary) {
+  const list = $('summaryList');
+  if (!summary.hours) {
+    list.innerHTML = '<div class="empty">No completed shifts yet.</div>';
+    return;
+  }
+  list.innerHTML = `
+    <div class="row">
+      <div>
+        <div class="who">All completed shifts</div>
+        <div class="sub">${summary.approvedHours} hrs approved by your manager</div>
+      </div>
+      <span class="dur">${summary.hours} hrs</span>
+    </div>`;
+}
+
+function renderPto(requests) {
+  const list = $('ptoList');
+  list.innerHTML = requests.length === 0 ? '<div class="empty">No time-off requests yet.</div>' : '';
+  requests.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const range = p.startDate === p.endDate ? fmtDate(p.startDate) : fmtDate(p.startDate) + ' – ' + fmtDate(p.endDate);
+    const label = { pending:'Waiting', approved:'Approved', denied:'Denied' }[p.status] || p.status;
+    row.innerHTML = `
+      <div>
+        <div class="who">${range}</div>
+        ${p.reason ? `<div class="sub">${escapeHtml(p.reason)}</div>` : ''}
+      </div>
+      <span class="badge ${escapeHtml(p.status)}">${escapeHtml(label)}</span>`;
+    list.appendChild(row);
+  });
+}
+
+// ---------------------------------------------------------------
+// Location and map ("Where you are")
+// ---------------------------------------------------------------
+// Wraps the browser's location API so we can use await with it,
+// and turns its error codes into messages a person can act on.
+function getLocation() {
   return new Promise((resolve, reject) => {
-    if(!navigator.geolocation){ reject(new Error('Geolocation not supported')); return; }
+    if (!navigator.geolocation) {
+      reject(new Error("This browser can't share your location."));
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
-      pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-      err => reject(err),
-      { enableHighAccuracy: true, timeout: 8000 }
+      pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+      err => {
+        const messages = {
+          1: 'Location is turned off for this site. Allow it in your browser settings to clock in.',
+          2: "Your location isn't available right now. Turn on location services and try again.",
+          3: 'Finding your location took too long. Tap Update to try again.'
+        };
+        reject(new Error(messages[err.code] || 'Could not get your location.'));
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
     );
   });
 }
- 
-const confirmDialog = document.getElementById('confirmDialog');
-function openConfirm(empId){
-  pendingEmpId = empId;
-  const emp = employees.find(x => x.id === empId);
-  const active = activeEntryFor(empId);
-  document.getElementById('confirmName').textContent = emp.name;
-  document.getElementById('confirmSub').textContent = active ? 'Clock out now?' : 'Clock in now?';
-  document.getElementById('confirmMsg').textContent = '';
-  const okBtn = document.getElementById('confirmOk');
-  okBtn.textContent = active ? 'Clock out' : 'Clock in';
-  okBtn.className = 'btn ' + (active ? 'danger' : 'primary');
-  confirmDialog.showModal();
-}
-document.getElementById('confirmCancel').addEventListener('click', () => confirmDialog.close());
- 
-document.getElementById('confirmOk').addEventListener('click', async () => {
-  const msg = document.getElementById('confirmMsg');
-  const active = activeEntryFor(pendingEmpId);
-  msg.textContent = '';
-  try{
-    let res;
-    if(active){
-      res = await fetch('/clock-out', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ employeeId: pendingEmpId })
-      });
-    } else {
-      const loc = await getLocation(); // only clock-in needs a location, since only /clock-in checks the geofence
-      res = await fetch('/clock-in', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ employeeId: pendingEmpId, latitude: loc.latitude, longitude: loc.longitude })
-      });
-    }
-    const data = await res.json();
-    if(!data.success){
-      msg.textContent = data.message || 'Something went wrong.';
-      return;
-    }
-    confirmDialog.close();
-    await loadData();
-  } catch(err){
-    msg.textContent = err.message === 'User denied Geolocation'
-      ? 'Location permission is required to clock in.'
-      : 'Could not reach the server.';
-  }
-});
 
-restoreLogin();
-
-if(currentUser){
-  loadData();
-}
-
-document.getElementById('logoutBtn')
-.addEventListener('click', () => {
-
-  localStorage.removeItem('user');
-
-  location.reload();
-
-});
-
-document.getElementById('loginBtn')
-.addEventListener('click', async () => {
-
-  const email =
-    document.getElementById('loginEmail').value;
-
-  const password =
-    document.getElementById('loginPassword').value;
-
-  const res = await fetch('/login', {
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json'
-    },
-    body: JSON.stringify({
-      email,
-      password,
-      deviceId
-    })
-  });
-
-  const data = await res.json();
-
-  if(!data.success){
-
-    document.getElementById('authMsg').textContent =
-      data.message;
-
+async function loadSitesAndLocate() {
+  try {
+    mySites = await api('/my-sites');
+  } catch (err) {
+    $('locStatus').textContent = err.message;
     return;
   }
-
-  currentUser = data.user;
-
-  localStorage.setItem(
-    'user',
-    JSON.stringify(data.user)
-  );
-
-  document.getElementById('authSection').style.display = 'none';
-  document.getElementById('appSection').style.display = 'block';
-
-  loadData();
-
-});
-
-document.getElementById('registerBtn')
-.addEventListener('click', async () => {
-
-  const company =
-    document.getElementById('registerCompany').value;
-
-  const name =
-    document.getElementById('registerName').value;
-
-  const email =
-    document.getElementById('registerEmail').value;
-
-  const password =
-    document.getElementById('registerPassword').value;
-
-  const res = await fetch('/register', {
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json'
-    },
-    body: JSON.stringify({
-      company,
-      name,
-      email,
-      password,
-      deviceId
-    })
-  });
-
-  const data = await res.json();
-
-  document.getElementById('authMsg').textContent =
-    data.success
-      ? 'Account created! You can now log in.'
-      : data.message;
-
-});
-
-function fillPtoDropdown(){
-  const sel = document.getElementById('ptoEmployee');
-
-  sel.innerHTML = employees
-    .map(e => `<option value="${e.id}">${escapeHtml(e.name)}</option>`)
-    .join('');
+  locate();
 }
 
-document.getElementById('ptoSubmit').addEventListener('click', async () => {
-
-  const employeeId =
-    Number(document.getElementById('ptoEmployee').value);
-
-  const startDate =
-    document.getElementById('ptoStart').value;
-
-  const endDate =
-    document.getElementById('ptoEnd').value;
-
-  const reason =
-    document.getElementById('ptoReason').value;
-
-  const msg =
-    document.getElementById('ptoMsg');
-
-  if(!startDate || !endDate){
-    msg.textContent = 'Pick both dates.';
-    return;
+async function locate() {
+  const status = $('locStatus');
+  $('locateBtn').disabled = true;
+  status.className = 'loc-status';
+  status.textContent = 'Finding your location…';
+  try {
+    lastPos = await getLocation();
+    renderLocation();
+  } catch (err) {
+    lastPos = null;
+    status.className = 'loc-status away';
+    status.textContent = err.message;
+    drawMap();
+  } finally {
+    $('locateBtn').disabled = false;
   }
+}
+$('locateBtn').addEventListener('click', locate);
 
-  const res = await fetch('/pto-request', {
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json'
-    },
-    body: JSON.stringify({
-      employeeId,
-      startDate,
-      endDate,
-      reason
-    })
+// Finds the site whose edge is closest to you
+function nearestSite(pos) {
+  let best = null;
+  mySites.forEach(site => {
+    const distance = distanceMeters(pos.latitude, pos.longitude, site.lat, site.lng);
+    const gap = distance - site.radiusMeters; // 0 or less = you're inside
+    if (!best || gap < best.gap) best = { site, distance, gap };
   });
+  return best;
+}
 
-  const data = await res.json();
+function renderLocation() {
+  const status = $('locStatus');
+  if (!lastPos) return;
 
-  if(data.success){
-
-    document.getElementById('ptoDialog').close();
-
-    msg.textContent = '';
-
+  if (mySites.length === 0) {
+    status.className = 'loc-status away';
+    status.textContent = "Your manager hasn't added a work site yet, so clocking in won't work until they do.";
   } else {
+    const n = nearestSite(lastPos);
+    if (n.gap <= 0) {
+      status.className = 'loc-status here';
+      status.innerHTML = `You're at <strong>${escapeHtml(n.site.name)}</strong>. You can clock in.`;
+    } else {
+      status.className = 'loc-status away';
+      status.innerHTML = `You're <strong>${fmtDistance(n.gap)}</strong> from ${escapeHtml(n.site.name)}, the closest work site.`;
+    }
+  }
+  if (lastPos.accuracy > 100) {
+    status.innerHTML += `<span class="muted">Your phone only knows your location to within about ${fmtDistance(lastPos.accuracy)}, so this may be a little off.</span>`;
+  }
+  drawMap();
+}
 
-    msg.textContent = 'Could not submit request.';
+let map = null;
+let mapLayers = [];
 
+function drawMap() {
+  if (!window.L) { $('map').hidden = true; return; } // map library didn't load: text status still works
+
+  if (!map) {
+    map = L.map('map', { scrollWheelZoom: false });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+    }).addTo(map);
   }
 
+  mapLayers.forEach(layer => layer.remove());
+  mapLayers = [];
+
+  const siteColor = cssVar('--primary');
+  const youColor = cssVar('--accent');
+
+  // Work sites = turquoise circles
+  mySites.forEach(site => {
+    mapLayers.push(
+      L.circle([site.lat, site.lng], { radius: site.radiusMeters, color: siteColor, weight: 2, fillColor: siteColor, fillOpacity: 0.15 })
+        .bindTooltip(site.name)
+        .addTo(map)
+    );
+  });
+
+  // You = pink dot (with a faint circle showing how accurate the location is)
+  if (lastPos) {
+    const here = [lastPos.latitude, lastPos.longitude];
+    mapLayers.push(L.circle(here, { radius: lastPos.accuracy, color: youColor, weight: 1, fillColor: youColor, fillOpacity: 0.08, interactive: false }).addTo(map));
+    mapLayers.push(L.circleMarker(here, { radius: 8, color: '#fff', weight: 3, fillColor: youColor, fillOpacity: 1 }).bindTooltip('You').addTo(map));
+  }
+
+  // Zoom so you and your closest site are both in view
+  let bounds = null;
+  if (lastPos) {
+    bounds = L.latLng(lastPos.latitude, lastPos.longitude).toBounds(Math.max(lastPos.accuracy * 2, 120));
+    const n = mySites.length ? nearestSite(lastPos) : null;
+    if (n && n.distance < 20000) bounds.extend(L.latLng(n.site.lat, n.site.lng).toBounds(n.site.radiusMeters * 2));
+  } else {
+    mySites.forEach(site => {
+      const b = L.latLng(site.lat, site.lng).toBounds(site.radiusMeters * 2);
+      bounds = bounds ? bounds.extend(b) : b;
+    });
+  }
+
+  map.invalidateSize();
+  if (bounds) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 18 });
+  else map.setView([20, 0], 2);
+}
+
+document.addEventListener('themechange', () => { if (map) drawMap(); });
+
+// ---------------------------------------------------------------
+// Clocking in and out
+// ---------------------------------------------------------------
+$('clockBtn').addEventListener('click', () => {
+  $('confirmTitle').textContent = openEntry ? 'Clock out now?' : 'Clock in now?';
+  $('confirmMsg').textContent = '';
+  $('confirmMsg').className = 'msg';
+  const ok = $('confirmOk');
+  ok.textContent = openEntry ? 'Clock out' : 'Clock in';
+  ok.className = 'btn ' + (openEntry ? 'accent' : 'primary');
+  ok.disabled = false;
+  $('confirmDialog').showModal();
 });
 
+$('confirmCancel').addEventListener('click', () => $('confirmDialog').close());
+
+$('confirmOk').addEventListener('click', async () => {
+  const ok = $('confirmOk');
+  const msg = $('confirmMsg');
+  ok.disabled = true; // stops double-taps from sending two requests
+  msg.className = 'msg';
+  try {
+    if (openEntry) {
+      await api('/clock-out', { method: 'POST', body: {} });
+    } else {
+      msg.className = 'msg ok';
+      msg.textContent = 'Checking your location…';
+      const loc = await getLocation();
+      lastPos = loc;      // refresh the map with this fresh reading too
+      renderLocation();
+      await api('/clock-in', { method: 'POST', body: { latitude: loc.latitude, longitude: loc.longitude } });
+    }
+    $('confirmDialog').close();
+    $('clockMsg').textContent = '';
+    await loadData();
+  } catch (err) {
+    msg.className = 'msg';
+    msg.textContent = err.message;
+    ok.disabled = false;
+  }
+});
+
+// ---------------------------------------------------------------
+// Time off
+// ---------------------------------------------------------------
+$('ptoOpen').addEventListener('click', () => {
+  $('ptoMsg').textContent = '';
+  $('ptoDialog').showModal();
+});
+$('ptoCancel').addEventListener('click', () => $('ptoDialog').close());
+
+$('ptoSubmit').addEventListener('click', async () => {
+  const startDate = $('ptoStart').value;
+  const endDate = $('ptoEnd').value || startDate;
+  const reason = $('ptoReason').value;
+  if (!startDate) { $('ptoMsg').textContent = 'Pick the first day off.'; return; }
+
+  try {
+    await api('/pto-request', { method: 'POST', body: { startDate, endDate, reason } });
+    $('ptoDialog').close();
+    $('ptoStart').value = '';
+    $('ptoEnd').value = '';
+    $('ptoReason').value = '';
+    loadData();
+  } catch (err) {
+    $('ptoMsg').textContent = err.message;
+  }
+});
+
+// ---------------------------------------------------------------
+// Log in, sign up, forgot password, log out
+// ---------------------------------------------------------------
+async function login() {
+  const btn = $('loginBtn');
+  $('loginMsg').className = 'msg';
+  $('loginMsg').textContent = '';
+  btn.disabled = true;
+  try {
+    const data = await api('/login', {
+      method: 'POST',
+      body: { email: $('loginEmail').value, password: $('loginPassword').value, deviceId }
+    });
+    saveSession(data.token, data.user);
+    $('loginPassword').value = '';
+    showApp();
+  } catch (err) {
+    $('loginMsg').textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+$('loginBtn').addEventListener('click', login);
+$('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+
+$('registerBtn').addEventListener('click', async () => {
+  const btn = $('registerBtn');
+  const msg = $('registerMsg');
+  msg.className = 'msg';
+  msg.textContent = '';
+  btn.disabled = true;
+  try {
+    await api('/register', {
+      method: 'POST',
+      body: {
+        company: $('registerCompany').value,
+        name: $('registerName').value,
+        email: $('registerEmail').value,
+        password: $('registerPassword').value,
+        deviceId
+      }
+    });
+    // Back to log in with the email already filled in
+    $('loginEmail').value = $('registerEmail').value;
+    $('registerPassword').value = '';
+    showCard('login');
+    $('loginMsg').className = 'msg ok';
+    $('loginMsg').textContent = "You're all set. Log in with your new password.";
+    $('loginPassword').focus();
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('forgotRequestBtn').addEventListener('click', async () => {
+  const msg = $('forgotRequestMsg');
+  const email = $('forgotEmail').value.trim();
+  msg.className = 'msg';
+  if (!email) { msg.textContent = 'Enter your email first.'; return; }
+  try {
+    await api('/forgot-password', { method: 'POST', body: { email } });
+    msg.className = 'msg ok';
+    msg.textContent = 'Request sent. Your manager will see it on their dashboard and give you a code.';
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+});
+
+$('resetBtn').addEventListener('click', async () => {
+  const msg = $('resetMsg');
+  const btn = $('resetBtn');
+  msg.className = 'msg';
+  msg.textContent = '';
+  btn.disabled = true;
+  try {
+    await api('/reset-password', {
+      method: 'POST',
+      body: { email: $('forgotEmail').value, code: $('resetCode').value, newPassword: $('resetPassword').value }
+    });
+    $('loginEmail').value = $('forgotEmail').value;
+    $('resetCode').value = '';
+    $('resetPassword').value = '';
+    showCard('login');
+    $('loginMsg').className = 'msg ok';
+    $('loginMsg').textContent = 'Password changed. Log in with your new password.';
+    $('loginPassword').focus();
+  } catch (err) {
+    msg.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$('logoutBtn').addEventListener('click', async () => {
+  try { await api('/logout', { method: 'POST', body: {} }); } catch { /* logging out anyway */ }
+  clearSession();
+  location.reload();
+});
+
+// The company list comes from the server, so it only has to be edited in one place.
+async function loadCompanies() {
+  try {
+    const companies = await api('/companies');
+    $('registerCompany').innerHTML =
+      '<option value="">Choose your company</option>' +
+      companies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  } catch { /* the sign-up form will show an error if they try without a company */ }
+}
+
+// ---------------------------------------------------------------
+// Start up
+// ---------------------------------------------------------------
+loadCompanies();
+restoreSession();
+tick();
+if (token) showApp(); else showAuth();
 </script>
 </body>
 </html>
