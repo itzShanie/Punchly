@@ -8,8 +8,371 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
-<script src="theme.js"></script>
+<style>
+/* =====================================================================
+   Time Clock styles, shared by index.html and manager.html
+   Colors live in the variables below: change them here and both pages update.
+   ===================================================================== */
+
+/* ---------- Light theme (default) ---------- */
+:root{
+  color-scheme: light;
+
+  /* the signature trio, used in the top stripe and logo */
+  --turq:#2EC4B6;
+  --blue:#8CC8F5;
+  --pink:#F48FBF;
+
+  --bg:#F4F8FC;
+  --surface:#FFFFFF;
+  --surface-2:#F6FAFD;
+  --line:#DEE8F1;
+  --text:#1C2A3A;
+  --muted:#627386;
+
+  --primary:#0F8F88;        /* turquoise buttons */
+  --primary-hover:#0C7C76;
+  --primary-text:#FFFFFF;
+  --primary-soft:#DDF4F2;
+  --primary-ink:#0B6E69;
+
+  --accent:#D6468A;         /* pink: clock out, "you are here" */
+  --accent-hover:#C13A7B;
+  --accent-text:#FFFFFF;
+  --accent-soft:#FCE7F1;
+  --accent-ink:#A8326B;
+
+  --blue-soft:#E3F1FD;
+  --blue-ink:#2B6CA3;
+
+  --danger:#C63A59;
+  --danger-soft:#FBE4E9;
+  --ok:#0F8F88;
+  --link:#0F8F88;
+  --focus:rgba(46,196,182,.38);
+  --shadow:0 1px 2px rgba(28,42,58,.04), 0 8px 24px rgba(28,42,58,.05);
+
+  --radius:16px;
+  --page-w:540px;
+}
+
+/* ---------- Dark theme ---------- */
+[data-theme="dark"]{
+  color-scheme: dark;
+
+  --bg:#0F1724;
+  --surface:#172233;
+  --surface-2:#1D2A3D;
+  --line:#2A3A51;
+  --text:#EAF1F8;
+  --muted:#9AA9BC;
+
+  --primary:#43D1C6;
+  --primary-hover:#62DCD2;
+  --primary-text:#062F2C;
+  --primary-soft:rgba(67,209,198,.14);
+  --primary-ink:#74E2D9;
+
+  --accent:#F48FBF;
+  --accent-hover:#F7A8CD;
+  --accent-text:#3D0B24;
+  --accent-soft:rgba(244,143,191,.15);
+  --accent-ink:#F8AFD2;
+
+  --blue-soft:rgba(140,200,245,.14);
+  --blue-ink:#ABD7F8;
+
+  --danger:#F3849C;
+  --danger-soft:rgba(243,132,156,.14);
+  --ok:#74E2D9;
+  --link:#74E2D9;
+  --focus:rgba(67,209,198,.42);
+  --shadow:0 1px 2px rgba(0,0,0,.25);
+}
+
+/* ---------- Base ---------- */
+*,*::before,*::after{ box-sizing:border-box; }
+[hidden]{ display:none !important; }
+
+html{ -webkit-text-size-adjust:100%; }
+body{
+  margin:0;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size:16px;
+  line-height:1.5;
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+body.wide{ --page-w:840px; }
+
+/* The one decorative flourish: a thin turquoise -> baby blue -> pink stripe across the top */
+body::before{
+  content:'';
+  position:fixed;
+  top:0; left:0; right:0;
+  height:4px;
+  background:linear-gradient(90deg, var(--turq), var(--blue) 50%, var(--pink));
+  z-index:1000;
+}
+
+h1{ font-size:1.7rem; line-height:1.2; font-weight:700; letter-spacing:-0.02em; margin:0; }
+h2{ font-size:1.05rem; line-height:1.3; font-weight:700; margin:0; }
+p{ margin:0; }
+.muted{ color:var(--muted); }
+.small{ font-size:.875rem; }
+.hint{ color:var(--muted); font-size:.9rem; margin:-6px 0 14px; }
+
+/* ---------- Layout ---------- */
+.topbar{
+  width:100%;
+  max-width:var(--page-w);
+  margin:0 auto;
+  padding:20px 20px 0;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+}
+.page{
+  width:100%;
+  max-width:var(--page-w);
+  margin:0 auto;
+  padding:20px 20px 28px;
+  flex:1;
+}
+
+.brand{ display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:-0.01em; }
+.brand svg{ width:36px; height:36px; flex-shrink:0; }
+.brand .brand-sub{ display:block; font-size:.78rem; font-weight:500; color:var(--muted); letter-spacing:0; }
+.topbar-actions{ display:flex; align-items:center; gap:8px; }
+
+.icon-btn{
+  width:38px; height:38px;
+  display:grid; place-items:center;
+  border-radius:50%;
+  border:1px solid var(--line);
+  background:var(--surface);
+  color:var(--text);
+  cursor:pointer;
+}
+.icon-btn:hover{ background:var(--surface-2); }
+.icon-btn svg{ width:18px; height:18px; }
+
+.credit{ text-align:center; color:var(--muted); font-size:.8rem; padding:4px 20px 24px; }
+.credit .heart{ color:var(--accent); }
+
+/* ---------- Cards ---------- */
+.card{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  padding:20px;
+  box-shadow:var(--shadow);
+  margin-bottom:16px;
+}
+.card-head{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:14px; }
+.card-head h2{ display:flex; align-items:center; gap:8px; }
+.card-intro{ margin:4px 0 16px; }
+.card-links{ display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px 16px; margin-top:16px; font-size:.9rem; color:var(--muted); }
+.section-head{ display:flex; justify-content:space-between; align-items:center; gap:12px; margin:28px 0 12px; }
+
+/* ---------- Form fields ---------- */
+.label{ display:block; font-size:.85rem; font-weight:600; color:var(--muted); margin:0 0 6px; }
+.field{
+  width:100%;
+  padding:11px 13px;
+  margin-bottom:14px;
+  font:inherit;
+  font-size:1rem;
+  color:var(--text);
+  background:var(--surface-2);
+  border:1px solid var(--line);
+  border-radius:10px;
+  transition:border-color .15s, box-shadow .15s;
+}
+.field:focus{ outline:none; border-color:var(--primary); box-shadow:0 0 0 3px var(--focus); }
+.field.inline{ width:auto; margin:0; }
+.field.rate{ width:96px; }
+.field.code-input{ letter-spacing:.12em; text-transform:uppercase; }
+
+/* ---------- Buttons ---------- */
+.btn{
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  padding:9px 16px;
+  border-radius:10px;
+  border:1px solid transparent;
+  font:inherit; font-size:.92rem; font-weight:600;
+  cursor:pointer;
+  transition:background-color .15s, color .15s;
+}
+.btn:active{ transform:translateY(1px); }
+.btn:disabled{ opacity:.55; cursor:default; transform:none; }
+.btn.primary{ background:var(--primary); color:var(--primary-text); }
+.btn.primary:hover:not(:disabled){ background:var(--primary-hover); }
+.btn.accent{ background:var(--accent); color:var(--accent-text); }
+.btn.accent:hover:not(:disabled){ background:var(--accent-hover); }
+.btn.ghost{ background:var(--surface); color:var(--text); border-color:var(--line); }
+.btn.ghost:hover:not(:disabled){ background:var(--surface-2); }
+.btn.danger{ background:var(--danger-soft); color:var(--danger); }
+.btn.block{ width:100%; }
+.btn.big{ padding:15px 18px; font-size:1.05rem; border-radius:12px; }
+.btn.small{ padding:6px 12px; font-size:.84rem; }
+
+.link{ background:none; border:none; padding:0; font:inherit; font-weight:600; color:var(--link); cursor:pointer; }
+.link:hover{ text-decoration:underline; }
+
+.btn:focus-visible, .link:focus-visible, .icon-btn:focus-visible{ outline:none; box-shadow:0 0 0 3px var(--focus); }
+
+/* ---------- Messages, badges, rows ---------- */
+.msg{ font-size:.9rem; color:var(--danger); margin-top:10px; }
+.msg:empty{ display:none; }
+.msg.ok{ color:var(--ok); }
+
+.badge{ display:inline-block; font-size:.78rem; font-weight:600; padding:3px 10px; border-radius:999px; white-space:nowrap; }
+.badge.pending{ background:var(--accent-soft); color:var(--accent-ink); }
+.badge.approved{ background:var(--primary-soft); color:var(--primary-ink); }
+.badge.denied{ background:var(--danger-soft); color:var(--danger); }
+.badge.count{ background:var(--blue-soft); color:var(--blue-ink); }
+
+.row{
+  display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;
+  padding:13px 16px;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:12px;
+  margin-bottom:10px;
+}
+.card .row{ background:var(--surface-2); }
+.row:last-child{ margin-bottom:0; }
+.who{ font-weight:600; }
+.sub{ color:var(--muted); font-size:.85rem; }
+.dur{ font-weight:700; font-variant-numeric:tabular-nums; color:var(--primary-ink); white-space:nowrap; }
+.actions{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.empty{ color:var(--muted); font-size:.92rem; padding:14px 16px; border:1px dashed var(--line); border-radius:12px; }
+
+.editor{ width:100%; display:none; flex-wrap:wrap; align-items:flex-end; gap:10px; padding-top:12px; border-top:1px solid var(--line); }
+.editor.open{ display:flex; }
+.editor label{ display:flex; flex-direction:column; gap:4px; font-size:.8rem; font-weight:600; color:var(--muted); }
+
+/* ---------- Employee page: greeting, clock, status ---------- */
+.hello{ display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:6px 16px; margin:6px 0 18px; }
+.clock{ font-size:clamp(1.8rem, 8vw, 2.3rem); font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; }
+
+.status-line{ display:flex; align-items:flex-start; gap:10px; font-weight:600; color:var(--muted); }
+.dot{ width:10px; height:10px; margin-top:7px; border-radius:50%; background:var(--muted); flex-shrink:0; }
+.status.on{ border-color:var(--primary); background:linear-gradient(180deg, var(--primary-soft), var(--surface) 75%); }
+.status.on .status-line{ color:var(--primary-ink); }
+.status.on .dot{ background:var(--primary); animation:pulse 2.2s ease-in-out infinite; }
+.elapsed{ font-size:2.6rem; font-weight:700; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; margin-top:4px; }
+.status .btn.big{ margin-top:18px; }
+
+@keyframes pulse{
+  0%,100%{ box-shadow:0 0 0 3px var(--primary-soft); }
+  50%{ box-shadow:0 0 0 7px var(--primary-soft); }
+}
+
+/* ---------- Map ---------- */
+.map{
+  height:230px;
+  border-radius:12px;
+  overflow:hidden;
+  border:1px solid var(--line);
+  background:var(--surface-2);
+  z-index:0;
+}
+.leaflet-container{ font-family:inherit; }
+/* Dark mode: flip the map tiles to dark without touching the colored circles drawn on top */
+[data-theme="dark"] .map .leaflet-tile-pane{ filter:invert(1) hue-rotate(180deg) brightness(.85) contrast(.9) saturate(.5); }
+[data-theme="dark"] .leaflet-control-attribution{ background:rgba(23,34,51,.8) !important; color:var(--muted); }
+[data-theme="dark"] .leaflet-control-attribution a{ color:var(--blue-ink); }
+[data-theme="dark"] .leaflet-bar a{ background:var(--surface); color:var(--text); border-color:var(--line); }
+
+.loc-status{ margin-top:12px; padding:11px 13px; border-radius:10px; background:var(--surface-2); font-size:.92rem; }
+.loc-status.here{ background:var(--primary-soft); color:var(--primary-ink); }
+.loc-status.away{ background:var(--accent-soft); color:var(--accent-ink); }
+.loc-status .muted{ display:block; margin-top:4px; font-size:.85rem; }
+
+/* ---------- Manager page bits ---------- */
+.site-form{ display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:12px; }
+.site-form .field{ margin:0; }
+.export-dates{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.export-dates .field{ margin:0; }
+
+/* ---------- Dialogs ---------- */
+dialog{
+  width:min(92vw, 380px);
+  padding:24px;
+  border:1px solid var(--line);
+  border-radius:var(--radius);
+  background:var(--surface);
+  color:var(--text);
+  box-shadow:0 24px 60px rgba(0,0,0,.25);
+}
+dialog::backdrop{ background:rgba(15,23,36,.45); }
+.dialog-title{ font-size:1.15rem; font-weight:700; margin-bottom:12px; }
+.dialog-actions{ display:flex; justify-content:flex-end; gap:10px; margin-top:16px; }
+.code{
+  margin:14px 0;
+  padding:16px;
+  border-radius:12px;
+  text-align:center;
+  font-size:1.8rem;
+  font-weight:700;
+  letter-spacing:.14em;
+  background:var(--blue-soft);
+  color:var(--blue-ink);
+}
+
+@media (max-width:420px){
+  .export-dates{ grid-template-columns:1fr; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important; }
+}
+</style>
+<script>
+// Light / dark mode, shared by both pages.
+// Loaded in <head> so the right colors are applied before the page appears (no white flash).
+// Uses the phone/computer's setting by default; the moon/sun button overrides it and is remembered.
+(function () {
+  const root = document.documentElement;
+
+  let saved = null;
+  try { saved = localStorage.getItem('theme'); } catch {}
+  const systemDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = saved || (systemDark ? 'dark' : 'light');
+
+  const MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+  const SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+
+  function updateButtons() {
+    const dark = root.dataset.theme === 'dark';
+    document.querySelectorAll('[data-theme-toggle]').forEach(btn => {
+      btn.innerHTML = dark ? SUN : MOON;
+      btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
+      btn.title = dark ? 'Light mode' : 'Dark mode';
+    });
+  }
+
+  function toggle() {
+    root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem('theme', root.dataset.theme); } catch {}
+    updateButtons();
+    document.dispatchEvent(new Event('themechange')); // lets the map redraw in the new colors
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-theme-toggle]').forEach(btn => btn.addEventListener('click', toggle));
+    updateButtons();
+  });
+})();
+</script>
 </head>
 <body class="wide">
 
