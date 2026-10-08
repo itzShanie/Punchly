@@ -299,6 +299,20 @@ p{ margin:0; }
 /* ---------- Manager page bits ---------- */
 .site-form{ display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-bottom:12px; }
 .site-form .field{ margin:0; }
+.join-code-row{ display:flex; flex-wrap:wrap; align-items:center; gap:14px; }
+.join-code-row .code{ min-width:180px; }
+.add-company{ display:flex; gap:10px; flex-wrap:wrap; }
+.add-company .field{ flex:1; min-width:200px; margin:0; }
+.company-row{ flex-direction:column; align-items:stretch; }
+.company-top{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:10px; }
+.company-name{ display:flex; gap:8px; flex:1; min-width:220px; }
+.company-name .field{ margin:0; font-weight:600; }
+.company-name .btn, .company-top .btn{ white-space:nowrap; }
+.mgr-list{ display:flex; flex-direction:column; gap:6px; margin-top:10px; }
+.mgr{ display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:.9rem; }
+.mgr-form{ display:none; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.mgr-form.open{ display:grid; }
+.mgr-form .field{ margin:0; }
 .export-dates{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .export-dates .field{ margin:0; }
 
@@ -389,7 +403,7 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
       <path d="M20 15v6l4.2 2.8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="31.5" cy="8.5" r="4.2" fill="#F48FBF" stroke="#fff" stroke-width="2"/>
     </svg>
-    <span>Punchly<span class="brand-sub">Manager</span></span>
+    <span>Punchly<span class="brand-sub" id="brandSub">Manager</span></span>
   </div>
   <div class="topbar-actions">
     <button class="icon-btn" data-theme-toggle></button>
@@ -410,7 +424,7 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
       <input class="field" id="loginPassword" type="password" autocomplete="current-password">
       <button class="btn primary block big" id="loginBtn">Log in</button>
       <div class="msg" id="loginMsg"></div>
-      <p class="muted small" style="margin-top:16px;">Forgot your manager password? Ask whoever set up this app to reset it for you.</p>
+      <p class="muted small" style="margin-top:16px;">Forgot your password? Ask the Punchly owner to reset it for you.</p>
     </div>
   </section>
 
@@ -421,12 +435,34 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
         <h1 id="hello">Dashboard</h1>
         <p class="muted" id="todayLabel"></p>
       </div>
-      <div style="min-width:200px; flex:0 1 260px;">
+      <div id="companyPicker" style="min-width:200px; flex:0 1 260px;" hidden>
         <label class="label" for="companySelect">Company</label>
         <select class="field" id="companySelect" style="margin:0;"></select>
       </div>
     </div>
     <div class="msg" id="pageMsg" style="margin-bottom:12px;"></div>
+
+    <!-- Shown when the owner hasn't made any companies yet -->
+    <div class="card" id="noCompanies" hidden>
+      <div class="card-head"><h2>Add your first company</h2></div>
+      <p class="hint">Everything in Punchly belongs to a company. Add one in the Companies section at the bottom of this page to get started.</p>
+    </div>
+
+    <div id="companyArea">
+    <!-- How employees join this company -->
+    <div class="card" id="joinCard">
+      <div class="card-head"><h2>Company code</h2></div>
+      <p class="hint">New employees type this code when they create their account, or open the sign-up link and it's filled in for them.</p>
+      <div class="join-code-row">
+        <div class="code" id="joinCodeValue" style="margin:0;">------</div>
+        <div class="actions">
+          <button class="btn ghost small" id="copyJoinCode">Copy code</button>
+          <button class="btn ghost small" id="copyJoinLink">Copy sign-up link</button>
+          <button class="btn ghost small" id="newJoinCode">Make a new code</button>
+        </div>
+      </div>
+      <div class="msg" id="joinMsg"></div>
+    </div>
 
     <div class="card">
       <div class="card-head"><h2>On the clock now <span class="badge count" id="openCount" hidden></span></h2></div>
@@ -491,6 +527,19 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
       <p class="hint" style="margin:12px 0 0;">Payroll only pays approved shifts. Hours still waiting for approval are listed in the "unapprovedHours" column.</p>
       <div class="msg" id="exportMsg"></div>
     </div>
+    </div><!-- /companyArea -->
+
+    <!-- Owner only: every company in Punchly -->
+    <div class="card" id="companiesCard" hidden>
+      <div class="card-head"><h2>Companies <span class="badge count" id="companyCount" hidden></span></h2></div>
+      <p class="hint">Each company is walled off: its managers and employees only ever see their own company. You can switch between them with the picker at the top.</p>
+      <div class="add-company">
+        <input class="field" id="newCompanyName" placeholder="New company name" maxlength="80" aria-label="New company name">
+        <button class="btn primary" id="addCompanyBtn">Add company</button>
+      </div>
+      <div class="msg" id="companyMsg"></div>
+      <div id="companiesList" style="margin-top:14px;"></div>
+    </div>
   </section>
 
 </main>
@@ -510,7 +559,8 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
 <script>
 let token = null;
 let currentManager = null;
-let currentCompany = null;
+let currentCompany = null;   // { id, name, joinCode } of the company being viewed
+let companies = [];          // the companies this person can see
 
 const $ = id => document.getElementById(id);
 
@@ -611,7 +661,7 @@ async function login() {
       method: 'POST',
       body: { email: $('loginEmail').value, password: $('loginPassword').value }
     });
-    if (data.user.role !== 'manager') {
+    if (data.user.role !== 'manager' && data.user.role !== 'owner') {
       // Not a manager: end the session we just got and say so
       token = data.token;
       await api('/logout', { method: 'POST', body: {} }).catch(() => {});
@@ -641,21 +691,163 @@ $('logoutBtn').addEventListener('click', async () => {
 // ---------------------------------------------------------------
 // Company picker
 // ---------------------------------------------------------------
+const isOwner = () => currentManager && currentManager.role === 'owner';
+
+// A manager gets exactly one company back from the server; the owner gets all of them.
 async function loadCompanies() {
-  const companies = await api('/companies');
-  const sel = $('companySelect');
-  sel.innerHTML = companies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  companies = await api('/companies');
+
   // Remember the last company picked so a refresh doesn't jump back to the first one
-  const last = localStorage.getItem('managerCompany');
-  currentCompany = companies.includes(last) ? last : companies[0];
-  sel.value = currentCompany;
-  sel.addEventListener('change', () => {
-    currentCompany = sel.value;
-    localStorage.setItem('managerCompany', currentCompany);
-    loadAll();
+  const lastId = Number(localStorage.getItem('managerCompanyId'));
+  const keepId = currentCompany ? currentCompany.id : lastId;
+  currentCompany = companies.find(c => c.id === keepId) || companies[0] || null;
+
+  const sel = $('companySelect');
+  sel.innerHTML = companies.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+  if (currentCompany) sel.value = currentCompany.id;
+  $('companyPicker').hidden = !isOwner() || companies.length === 0;
+  // Managers have no picker, so show their company name under the greeting instead
+  const today = new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' });
+  $('todayLabel').textContent = !isOwner() && currentCompany ? today + ' · ' + currentCompany.name : today;
+
+  $('noCompanies').hidden = companies.length > 0;
+  $('companyArea').hidden = companies.length === 0;
+  renderJoinCard();
+  if (isOwner()) renderCompanies();
+}
+$('companySelect').addEventListener('change', () => {
+  currentCompany = companies.find(c => c.id === Number($('companySelect').value));
+  localStorage.setItem('managerCompanyId', currentCompany.id);
+  renderJoinCard();
+  loadAll();
+});
+const companyParam = () => 'companyId=' + (currentCompany ? currentCompany.id : '');
+
+// ---------------------------------------------------------------
+// Company code (how employees join)
+// ---------------------------------------------------------------
+function joinLink() {
+  return location.origin + '/?code=' + encodeURIComponent(currentCompany.joinCode);
+}
+function renderJoinCard() {
+  if (!currentCompany) return;
+  $('joinCodeValue').textContent = currentCompany.joinCode;
+  $('joinMsg').textContent = '';
+}
+async function copyText(text, btn) {
+  try { await navigator.clipboard.writeText(text); flash(btn, 'Copied'); }
+  catch { flash(btn, 'Copy failed'); }
+}
+$('copyJoinCode').addEventListener('click', () => copyText(currentCompany.joinCode, $('copyJoinCode')));
+$('copyJoinLink').addEventListener('click', () => copyText(joinLink(), $('copyJoinLink')));
+$('newJoinCode').addEventListener('click', async () => {
+  if (!confirm('Make a new code? The old code stops working for new sign-ups. People who already joined are not affected.')) return;
+  try {
+    const data = await api('/companies/' + currentCompany.id + '/new-code', { method: 'POST', body: {} });
+    currentCompany.joinCode = data.joinCode;
+    renderJoinCard();
+    if (isOwner()) renderCompanies();
+  } catch (err) { $('joinMsg').textContent = err.message; }
+});
+
+// ---------------------------------------------------------------
+// Companies (owner only): add, rename, managers, delete
+// ---------------------------------------------------------------
+function renderCompanies() {
+  $('companiesCard').hidden = false;
+  setCount('companyCount', companies.length);
+  const list = $('companiesList');
+  list.innerHTML = companies.length === 0 ? '<div class="empty">No companies yet. Add one above.</div>' : '';
+
+  companies.forEach(c => {
+    const people = c.employeeCount === 1 ? '1 employee' : c.employeeCount + ' employees';
+    const managers = (c.managers || []).map(m => `
+      <div class="mgr">
+        <span><strong>${escapeHtml(m.name)}</strong> <span class="sub">${escapeHtml(m.email)}</span></span>
+        <button class="btn danger small" data-remove-mgr="${m.id}">Remove</button>
+      </div>`).join('');
+
+    const div = makeRow(`
+      <div class="company-top">
+        <div class="company-name">
+          <input class="field" value="${escapeHtml(c.name)}" maxlength="80" aria-label="Company name">
+          <button class="btn ghost small" data-act="rename">Save name</button>
+        </div>
+        <div class="actions">
+          <span class="badge count">Code ${escapeHtml(c.joinCode)}</span>
+          <span class="sub">${people}</span>
+          <button class="btn ghost small" data-act="add-mgr">Add manager</button>
+          <button class="btn danger small" data-act="delete">Delete</button>
+        </div>
+      </div>
+      <div class="mgr-list">${managers || '<span class="sub">No managers yet. You can manage it yourself, or add one for the client.</span>'}</div>
+      <div class="mgr-form">
+        <input class="field" placeholder="Manager's name" data-f="name" aria-label="Manager's name">
+        <input class="field" type="email" placeholder="Their email" data-f="email" aria-label="Manager's email">
+        <input class="field" type="text" placeholder="Starting password (8+)" data-f="password" aria-label="Starting password">
+        <button class="btn primary small" data-act="save-mgr">Create manager</button>
+      </div>
+      <div class="msg" style="margin:0;"></div>`);
+    div.classList.add('company-row');
+
+    const msg = div.querySelector('.msg');
+    const nameInput = div.querySelector('.company-name input');
+    const say = (text, ok) => { msg.className = 'msg' + (ok ? ' ok' : ''); msg.textContent = text; };
+
+    div.querySelector('[data-act="rename"]').addEventListener('click', async () => {
+      try {
+        await api('/companies/' + c.id + '/rename', { method: 'POST', body: { name: nameInput.value } });
+        flash(div.querySelector('[data-act="rename"]'), 'Saved ✓');
+        await loadCompanies();
+      } catch (err) { say(err.message); }
+    });
+
+    div.querySelector('[data-act="add-mgr"]').addEventListener('click', () => div.querySelector('.mgr-form').classList.toggle('open'));
+
+    div.querySelector('[data-act="save-mgr"]').addEventListener('click', async () => {
+      const f = name => div.querySelector(`[data-f="${name}"]`).value;
+      try {
+        await api('/companies/' + c.id + '/managers', { method: 'POST', body: { name: f('name'), email: f('email'), password: f('password') } });
+        await loadCompanies();
+      } catch (err) { say(err.message); }
+    });
+
+    div.querySelectorAll('[data-remove-mgr]').forEach(btn => btn.addEventListener('click', async () => {
+      if (!confirm('Remove this manager? They will be logged out and can no longer log in.')) return;
+      try {
+        await api('/managers/' + btn.dataset.removeMgr, { method: 'DELETE' });
+        await loadCompanies();
+      } catch (err) { say(err.message); }
+    }));
+
+    div.querySelector('[data-act="delete"]').addEventListener('click', async () => {
+      if (!confirm(`Delete ${c.name}? This only works when nobody belongs to it anymore. Its work sites are deleted too.`)) return;
+      try {
+        await api('/companies/' + c.id, { method: 'DELETE' });
+        if (currentCompany && currentCompany.id === c.id) currentCompany = null;
+        await loadCompanies();
+        loadAll();
+      } catch (err) { say(err.message); }
+    });
+
+    list.appendChild(div);
   });
 }
-const companyParam = () => 'company=' + encodeURIComponent(currentCompany);
+
+$('addCompanyBtn').addEventListener('click', async () => {
+  const msg = $('companyMsg');
+  msg.className = 'msg';
+  try {
+    const data = await api('/companies', { method: 'POST', body: { name: $('newCompanyName').value } });
+    $('newCompanyName').value = '';
+    currentCompany = { id: Number(data.id) }; // jump straight to the new company
+    await loadCompanies();
+    loadAll();
+    msg.className = 'msg ok';
+    msg.textContent = 'Company added. Share its code with the employees, and add a work site for it.';
+  } catch (err) { msg.textContent = err.message; }
+});
+$('newCompanyName').addEventListener('keydown', e => { if (e.key === 'Enter') $('addCompanyBtn').click(); });
 
 // ---------------------------------------------------------------
 // On the clock now (fix forgotten clock-outs)
@@ -928,7 +1120,7 @@ $('addSiteBtn').addEventListener('click', async () => {
   try {
     await api('/sites', {
       method: 'POST',
-      body: { company: currentCompany, name, lat: Number(latText), lng: Number(lngText), radiusMeters: Number($('siteRadius').value) }
+      body: { companyId: currentCompany.id, name, lat: Number(latText), lng: Number(lngText), radiusMeters: Number($('siteRadius').value) }
     });
     $('siteName').value = '';
     $('siteLat').value = '';
@@ -949,7 +1141,7 @@ async function downloadCsv(path, kind) {
   const end = $('exportEnd').value;
 
   const params = new URLSearchParams({
-    company: currentCompany,
+    companyId: currentCompany.id,
     tz: Intl.DateTimeFormat().resolvedOptions().timeZone // so times in the file match this computer's clock
   });
   // Start/end of the chosen days in THIS computer's timezone, not the server's
@@ -964,7 +1156,7 @@ async function downloadCsv(path, kind) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `Punchly ${kind} ${currentCompany} ${start || 'start'} to ${end || 'today'}.csv`;
+    a.download = `Punchly ${kind} ${currentCompany.name} ${start || 'start'} to ${end || 'today'}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -990,6 +1182,7 @@ $('exportPayroll').addEventListener('click', () => downloadCsv('/export/payroll'
 // ---------------------------------------------------------------
 async function loadAll() {
   $('pageMsg').textContent = '';
+  if (!currentCompany) return; // nothing to show until a company exists
   try {
     await Promise.all([loadOpen(), loadEntries(), loadPto(), loadResetRequests(), loadEmployees(), loadSites()]);
   } catch (err) {
@@ -1004,6 +1197,10 @@ async function showDashboard() {
   $('hello').textContent = 'Hi, ' + firstName(currentManager.name);
   $('todayLabel').textContent = new Date().toLocaleDateString([], { weekday:'long', month:'long', day:'numeric' });
   try {
+    // Ask the server who we are, so the role is always fresh (e.g. after the upgrade to owner)
+    currentManager = await api('/me');
+    localStorage.setItem('managerSession', JSON.stringify({ token, user: currentManager }));
+    $('brandSub').textContent = isOwner() ? 'Owner' : 'Manager';
     await loadCompanies();
     loadAll();
   } catch (err) { showError(err); }

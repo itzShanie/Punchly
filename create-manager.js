@@ -1,10 +1,11 @@
-// Creates a manager account (or turns an existing account into a manager).
+// Creates the Punchly OWNER account (or turns an existing account into the owner).
+// The owner sees every company, and creates each company's managers from the dashboard.
 //
 // Easiest way: just run   node create-manager.js   and answer the questions.
 // Or all in one go:       node create-manager.js boss@example.com "a-strong-password" "Boss Name"
 //
 // IMPORTANT: this writes to the database on the computer you run it on.
-// Running it on your laptop does NOT add the manager to the live site on Render.
+// Running it on your laptop does NOT add the owner to the live site on Render.
 // For Render, either run it in the "Shell" tab there, or (no Shell needed) use the
 // MANAGER_EMAIL / MANAGER_PASSWORD / MANAGER_NAME environment variables described in server.js.
 
@@ -26,8 +27,8 @@ async function main() {
   console.log('Using database file: ' + path.resolve(dbPath));
 
   let [email, password, name] = process.argv.slice(2);
-  if (!email) email = await ask('Manager email: ');
-  if (!name) name = await ask('Manager full name: ');
+  if (!email) email = await ask('Owner email: ');
+  if (!name) name = await ask('Owner full name: ');
   if (!password) password = await ask('Password (8+ characters, it will show as you type): ');
 
   email = String(email || '').trim().toLowerCase();
@@ -54,19 +55,19 @@ async function main() {
   const existing = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email);
 
   if (existing) {
-    db.prepare("UPDATE users SET role = 'manager', password = ?, name = ? WHERE id = ?").run(hashed, name, existing.id);
-    console.log('Done. That existing account is now a manager, with the new password: ' + email);
+    db.prepare("UPDATE users SET role = 'owner', password = ?, name = ? WHERE id = ?").run(hashed, name, existing.id);
+    console.log('Done. That existing account is now the owner, with the new password: ' + email);
   } else {
     db.prepare(
-      "INSERT INTO users (company, name, email, password, role, hourlyRate) VALUES (?, ?, ?, ?, 'manager', 0)"
-    ).run('Company A', name, email, hashed);
-    console.log('Done. Manager account created: ' + email);
+      "INSERT INTO users (company, name, email, password, role, hourlyRate) VALUES ('', ?, ?, ?, 'owner', 0)"
+    ).run(name, email, hashed);
+    console.log('Done. Owner account created: ' + email);
   }
   console.log('Log in at /manager.html');
 }
 
 main().catch(err => {
-  console.error('\nCould not create the manager: ' + err.message);
+  console.error('\nCould not create the owner: ' + err.message);
   if (/NODE_MODULE_VERSION|was compiled against|invalid ELF|not a valid Win32/i.test(err.message)) {
     console.error('Fix: run   npm rebuild better-sqlite3   in this folder, then try again.');
   } else if (/Cannot find module/i.test(err.message)) {

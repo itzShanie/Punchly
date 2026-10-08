@@ -200,6 +200,9 @@ p{ margin:0; }
 .field:focus{ outline:none; border-color:var(--primary); box-shadow:0 0 0 3px var(--focus); }
 .field.inline{ width:auto; margin:0; }
 .field.rate{ width:96px; }
+.join-company{ margin:-6px 0 14px; padding:9px 12px; border-radius:10px; font-size:.9rem; }
+.join-company.ok{ background:var(--primary-soft); color:var(--primary-ink); }
+.join-company.bad{ background:var(--danger-soft); color:var(--danger); }
 .field.code-input{ letter-spacing:.12em; text-transform:uppercase; }
 
 /* ---------- Buttons ---------- */
@@ -423,8 +426,9 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
     </div>
 
     <div class="card" id="registerCard" hidden>
-      <label class="label" for="registerCompany">Company</label>
-      <select class="field" id="registerCompany"></select>
+      <label class="label" for="registerCode">Company code</label>
+      <input class="field code-input" id="registerCode" placeholder="Ask your manager for it" autocomplete="off" maxlength="12">
+      <div class="join-company" id="joinCompany" hidden></div>
       <label class="label" for="registerName">Full name</label>
       <input class="field" id="registerName" autocomplete="name">
       <label class="label" for="registerEmail">Email</label>
@@ -1023,7 +1027,7 @@ $('registerBtn').addEventListener('click', async () => {
     await api('/register', {
       method: 'POST',
       body: {
-        company: $('registerCompany').value,
+        companyCode: $('registerCode').value,
         name: $('registerName').value,
         email: $('registerEmail').value,
         password: $('registerPassword').value,
@@ -1089,23 +1093,47 @@ $('logoutBtn').addEventListener('click', async () => {
   location.reload();
 });
 
-// The company list comes from the server, so it only has to be edited in one place.
-async function loadCompanies() {
+// ---------------------------------------------------------------
+// Company code on sign-up
+// ---------------------------------------------------------------
+// As soon as a full code is typed, show which company it belongs to,
+// so people can tell they typed it right before creating the account.
+let codeCheckTimer = null;
+async function checkJoinCode() {
+  const box = $('joinCompany');
+  const code = $('registerCode').value.replace(/[^A-Za-z0-9]/g, '');
+  if (code.length < 6) { box.hidden = true; return; }
   try {
-    const companies = await api('/companies');
-    $('registerCompany').innerHTML =
-      '<option value="">Choose your company</option>' +
-      companies.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-  } catch { /* the sign-up form will show an error if they try without a company */ }
+    const data = await api('/join-code/' + encodeURIComponent(code));
+    box.className = 'join-company ok';
+    box.innerHTML = `You're joining <strong>${escapeHtml(data.name)}</strong>`;
+  } catch (err) {
+    box.className = 'join-company bad';
+    box.textContent = err.message;
+  }
+  box.hidden = false;
+}
+$('registerCode').addEventListener('input', () => {
+  clearTimeout(codeCheckTimer);
+  codeCheckTimer = setTimeout(checkJoinCode, 300);
+});
+
+// A manager can share a link like  https://your-site.onrender.com/?code=ABC123
+// which opens straight on sign-up with the code already filled in.
+function applyCodeFromLink() {
+  const code = new URLSearchParams(location.search).get('code');
+  if (!code || token) return;
+  showCard('register');
+  $('registerCode').value = code.toUpperCase();
+  checkJoinCode();
 }
 
 // ---------------------------------------------------------------
 // Start up
 // ---------------------------------------------------------------
-loadCompanies();
 restoreSession();
 tick();
-if (token) showApp(); else showAuth();
+if (token) showApp(); else { showAuth(); applyCodeFromLink(); }
 </script>
 </body>
 </html>

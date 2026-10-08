@@ -14,16 +14,27 @@ const MAX_DEVICES_PER_USER = 2;
 const SESSION_DAYS = 30; // how long someone stays logged in before they have to log in again
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const COMPANIES = [
-  'Company A',
-  'Company B',
-  'Company C',
-  'Company D'
-];
+// =====================================================================
+// Who can do what
+//   owner    = runs Punchly. Sees every company, adds/renames companies, creates managers.
+//   manager  = runs ONE company. Only ever sees that company's people, shifts and sites.
+//   employee = belongs to ONE company. Clocks in/out, requests time off.
+// =====================================================================
 
 // =====================================================================
 // Database tables
 // =====================================================================
+
+// NEW: companies now live in the database, so they can be added and renamed from the dashboard.
+// joinCode is what employees type when they sign up, so they never see a list of other companies.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS companies (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT UNIQUE NOT NULL,
+    joinCode TEXT UNIQUE NOT NULL,
+    createdAt INTEGER NOT NULL
+  )
+`);
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
@@ -77,7 +88,7 @@ db.exec(`
   )
 `);
 
-// NEW: one row per logged-in browser. The token is a long random string the browser
+// One row per logged-in browser. The token is a long random string the browser
 // keeps and sends back with every request, so the server knows who is asking.
 db.exec(`
   CREATE TABLE IF NOT EXISTS sessions (
@@ -87,7 +98,7 @@ db.exec(`
   )
 `);
 
-// NEW: forgot-password requests and the one-time codes managers hand out.
+// Forgot-password requests and the one-time codes managers hand out.
 // A row with no codeHash = "this person asked for help". A row with a codeHash = a code was issued.
 db.exec(`
   CREATE TABLE IF NOT EXISTS password_resets (
@@ -109,43 +120,95 @@ function addColumnIfMissing(table, column, definition) {
   }
 }
 addColumnIfMissing('entries', 'approved', 'INTEGER DEFAULT 0');
-addColumnIfMissing('entries', 'site', 'TEXT'); // NEW: remembers which site someone clocked in at
+addColumnIfMissing('entries', 'site', 'TEXT');
+addColumnIfMissing('users', 'companyId', 'INTEGER');  // NEW: which company this person belongs to
+addColumnIfMissing('sites', 'companyId', 'INTEGER');  // NEW: which company this site belongs to
 
-// ---- Make the first manager without needing a terminal ----
+// =====================================================================
+// Codes (join codes for companies, reset codes for passwords)
+// =====================================================================
+
+// Skips look-alike characters (no O/0, I/1/L) so codes are easy to read out loud
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function randomCode(length) {
+  let code = '';
+  for (let i = 0; i < length; i++) code += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
+  return code;
+}
+function normalizeCode(code) {
+  return String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); // "abcd-efgh" -> "ABCDEFGH"
+}
+function newJoinCode() {
+  let code;
+  do { code = randomCode(6); } while (db.prepare('SELECT 1 FROM companies WHERE joinCode = ?').get(code));
+  return code;
+}
+
+// =====================================================================
+// One-time upgrade of an existing database to the new company system
+// PRAGMA user_version is a number SQLite stores inside the database file,
+// so this block only ever runs once per database.
+// =====================================================================
+if (db.pragma('user_version', { simple: true }) < 1) {
+  db.transaction(() => {
+    // Every company name already in use (plus the old placeholder list) becomes a real company row
+    const seed = String(process.env.COMPANIES || 'Company A, Company B, Company C, Company D')
+      .split(',').map(s => s.trim()).filter(Boolean);
+    const inUse = [
+      ...db.prepare("SELECT DISTINCT company FROM users WHERE company <> ''").all(),
+      ...db.prepare("SELECT DISTINCT company FROM sites WHERE company <> ''").all()
+    ].map(r => r.company);
+
+    for (const name of new Set([...seed, ...inUse])) {
+      db.prepare('INSERT OR IGNORE INTO companies (name, joinCode, createdAt) VALUES (?, ?, ?)')
+        .run(name, newJoinCode(), Date.now());
+    }
+
+    db.exec('UPDATE users SET companyId = (SELECT id FROM companies WHERE companies.name = users.company) WHERE companyId IS NULL');
+    db.exec('UPDATE sites SET companyId = (SELECT id FROM companies WHERE companies.name = sites.company) WHERE companyId IS NULL');
+
+    // Until now the one manager could see every company, so that account becomes the owner
+    db.exec("UPDATE users SET role = 'owner' WHERE role = 'manager'");
+  })();
+  db.pragma('user_version = 1');
+  console.log('Database upgraded to the company system.');
+}
+
+// ---- Make the owner account without needing a terminal ----
 // On Render: Environment tab -> add MANAGER_EMAIL, MANAGER_PASSWORD (8+ characters) and MANAGER_NAME.
-// When the server starts it creates that manager if the email isn't registered yet
-// (or upgrades the account to manager if it is). It never overwrites an existing password,
+// When the server starts it creates that OWNER account if the email isn't registered yet
+// (or upgrades the account to owner if it is). It never overwrites an existing password,
 // so once you've logged in you can delete MANAGER_PASSWORD from Render.
-function createManagerFromEnv() {
+function createOwnerFromEnv() {
   const email = String(process.env.MANAGER_EMAIL || '').trim().toLowerCase();
   const password = process.env.MANAGER_PASSWORD || '';
-  const name = String(process.env.MANAGER_NAME || 'Manager').trim();
+  const name = String(process.env.MANAGER_NAME || 'Owner').trim();
   if (!email) return;
 
   const existing = db.prepare('SELECT id, role FROM users WHERE lower(email) = ?').get(email);
   if (existing) {
-    if (existing.role !== 'manager') {
-      db.prepare("UPDATE users SET role = 'manager' WHERE id = ?").run(existing.id);
-      console.log('Made ' + email + ' a manager (from MANAGER_EMAIL).');
+    if (existing.role !== 'owner') {
+      db.prepare("UPDATE users SET role = 'owner' WHERE id = ?").run(existing.id);
+      console.log('Made ' + email + ' the owner (from MANAGER_EMAIL).');
     }
     return;
   }
   if (password.length < 8) {
-    console.log('MANAGER_PASSWORD is missing or shorter than 8 characters, so no manager was created.');
+    console.log('MANAGER_PASSWORD is missing or shorter than 8 characters, so no owner was created.');
     return;
   }
-  db.prepare("INSERT INTO users (company, name, email, password, role, hourlyRate) VALUES (?, ?, ?, ?, 'manager', 0)")
-    .run(COMPANIES[0], name, email, bcrypt.hashSync(password, 10));
-  console.log('Manager account created from environment variables: ' + email);
+  db.prepare("INSERT INTO users (company, companyId, name, email, password, role, hourlyRate) VALUES ('', NULL, ?, ?, ?, 'owner', 0)")
+    .run(name, email, bcrypt.hashSync(password, 10));
+  console.log('Owner account created from environment variables: ' + email);
 }
-createManagerFromEnv();
+createOwnerFromEnv();
 
 // =====================================================================
 // Login checks ("middleware" = a function that runs before a route)
 // =====================================================================
 
 // Reads the token the browser sent, finds who it belongs to, and puts that person on req.user.
-// Routes then use req.user.id instead of trusting an ID the browser typed in.
+// Routes then use req.user instead of trusting IDs the browser typed in.
 function requireLogin(req, res, next) {
   const header = req.get('Authorization') || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -154,9 +217,11 @@ function requireLogin(req, res, next) {
   }
 
   const user = db.prepare(`
-    SELECT users.id, users.company, users.name, users.email, users.role, users.hourlyRate
+    SELECT users.id, users.companyId, companies.name AS companyName,
+           users.name, users.email, users.role, users.hourlyRate
     FROM sessions
     JOIN users ON users.id = sessions.userId
+    LEFT JOIN companies ON companies.id = users.companyId
     WHERE sessions.token = ? AND sessions.expiresAt > ?
   `).get(token, Date.now());
 
@@ -169,14 +234,57 @@ function requireLogin(req, res, next) {
   next();
 }
 
-// Same as requireLogin, plus the person must be a manager.
+// Managers AND the owner get through
 function requireManager(req, res, next) {
   requireLogin(req, res, () => {
-    if (req.user.role !== 'manager') {
+    if (req.user.role !== 'manager' && req.user.role !== 'owner') {
       return res.status(403).json({ success: false, message: 'Managers only.' });
     }
     next();
   });
+}
+
+// Only the owner gets through
+function requireOwner(req, res, next) {
+  requireLogin(req, res, () => {
+    if (req.user.role !== 'owner') {
+      return res.status(403).json({ success: false, message: 'Only the Punchly owner can do that.' });
+    }
+    next();
+  });
+}
+
+// ---- THE wall between companies ----
+// Works out which company a manager-page request is about.
+//   - a manager ALWAYS gets their own company, whatever the browser asks for
+//   - the owner picks one with ?companyId= (or companyId in the body)
+// Every manager route below goes through this or canManage(), so one company can't see another's data.
+function companyScope(req, res) {
+  const id = req.user.role === 'owner'
+    ? Number(req.query.companyId || (req.body && req.body.companyId))
+    : req.user.companyId;
+  const company = id ? db.prepare('SELECT id, name FROM companies WHERE id = ?').get(id) : null;
+  if (!company) {
+    res.status(400).json({ success: false, message: 'Pick a company first.' });
+    return null;
+  }
+  return company;
+}
+
+// Is this person allowed to touch something that belongs to companyId?
+function canManage(req, companyId) {
+  return req.user.role === 'owner' || (companyId != null && companyId === req.user.companyId);
+}
+
+// Looks up an employee and checks they're in a company this manager runs.
+// Answers "not found" either way, so nobody can poke at other companies' IDs.
+function findManagedEmployee(req, res, employeeId) {
+  const emp = db.prepare("SELECT id, name, companyId FROM users WHERE id = ? AND role = 'employee'").get(employeeId);
+  if (!emp || !canManage(req, emp.companyId)) {
+    res.status(404).json({ success: false, message: 'Employee not found.' });
+    return null;
+  }
+  return emp;
 }
 
 // =====================================================================
@@ -206,19 +314,12 @@ function isDateString(s) {
   return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
 }
 
-// Reset codes skip look-alike characters (no O/0, I/1/L) so they're easy to read out loud
-const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-function makeResetCode() {
-  let code = '';
-  for (let i = 0; i < 8; i++) code += CODE_CHARS[crypto.randomInt(CODE_CHARS.length)];
-  return code;
-}
-function normalizeCode(code) {
-  return String(code || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); // "abcd-efgh" -> "ABCDEFGH"
-}
-
 function formatDistance(m) {
   return m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m';
+}
+
+function cleanEmail(value) {
+  return String(value || '').trim().toLowerCase();
 }
 
 function toCSV(rows, columns) {
@@ -253,21 +354,31 @@ function exportRange(query) {
   return { startMs, endMs };
 }
 
+function safeFilePart(s) {
+  return String(s).replace(/[^A-Za-z0-9 _-]/g, '').trim().replace(/\s+/g, '-').toLowerCase() || 'company';
+}
+
 // =====================================================================
 // Public routes (no login needed)
 // =====================================================================
 
-app.get('/companies', (req, res) => res.json(COMPANIES));
+// Lets the sign-up page show "You're joining Acme Builders" once a code is typed.
+// Only answers for one exact code, so there's no way to list the companies.
+app.get('/join-code/:code', (req, res) => {
+  const company = db.prepare('SELECT name FROM companies WHERE joinCode = ?').get(normalizeCode(req.params.code));
+  if (!company) return res.status(404).json({ success: false, message: "That company code doesn't exist." });
+  res.json({ success: true, name: company.name });
+});
 
 app.post('/register', (req, res) => {
-  const company = req.body.company;
   const name = String(req.body.name || '').trim();
-  const email = String(req.body.email || '').trim().toLowerCase();
+  const email = cleanEmail(req.body.email);
   const password = String(req.body.password || '');
   const deviceId = req.body.deviceId;
 
-  if (!COMPANIES.includes(company)) {
-    return res.status(400).json({ success: false, message: 'Pick a company.' });
+  const company = db.prepare('SELECT id, name FROM companies WHERE joinCode = ?').get(normalizeCode(req.body.companyCode));
+  if (!company) {
+    return res.status(400).json({ success: false, message: "That company code doesn't exist. Ask your manager for it." });
   }
   if (!name) {
     return res.status(400).json({ success: false, message: 'Enter your name.' });
@@ -280,30 +391,31 @@ app.post('/register', (req, res) => {
   }
 
   // lower() so "Bob@Mail.com" and "bob@mail.com" count as the same email
-  const existing = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email);
-  if (existing) {
+  if (db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email)) {
     return res.status(400).json({ success: false, message: 'That email is already registered.' });
   }
 
   // bcrypt scrambles the password one-way. "10" = rounds of scrambling, a solid default.
-  const hashedPassword = bcrypt.hashSync(password, 10);
-
-  const info = db.prepare('INSERT INTO users (company, name, email, password) VALUES (?, ?, ?, ?)')
-    .run(company, name, email, hashedPassword);
+  const info = db.prepare("INSERT INTO users (company, companyId, name, email, password, role) VALUES (?, ?, ?, ?, ?, 'employee')")
+    .run(company.name, company.id, name, email, bcrypt.hashSync(password, 10));
 
   if (deviceId) {
     db.prepare('INSERT INTO user_devices (userId, deviceId) VALUES (?, ?)').run(info.lastInsertRowid, String(deviceId));
   }
 
-  res.json({ success: true });
+  res.json({ success: true, companyName: company.name });
 });
 
 app.post('/login', (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
+  const email = cleanEmail(req.body.email);
   const password = String(req.body.password || '');
   const deviceId = req.body.deviceId ? String(req.body.deviceId) : null;
 
-  const user = db.prepare('SELECT * FROM users WHERE lower(email) = ?').get(email);
+  const user = db.prepare(`
+    SELECT users.*, companies.name AS companyName
+    FROM users LEFT JOIN companies ON companies.id = users.companyId
+    WHERE lower(users.email) = ?
+  `).get(email);
 
   if (!user || !bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ success: false, message: 'Wrong email or password.' });
@@ -329,19 +441,18 @@ app.post('/login', (req, res) => {
   db.prepare('INSERT INTO sessions (token, userId, expiresAt) VALUES (?, ?, ?)')
     .run(token, user.id, Date.now() + SESSION_DAYS * DAY_MS);
 
-  const { password: _unused, ...safeUser } = user; // never send the password hash back
+  const { password: _unused, company: _old, ...safeUser } = user; // never send the password hash back
 
   res.json({ success: true, token, user: safeUser });
 });
 
 // ---- Forgot password ----
 // There's no email set up, so the manager is the one who hands out reset codes:
-// 1) employee taps "Forgot password" -> the request shows up on the manager dashboard
+// 1) employee taps "Forgot password" -> the request shows up on their company's dashboard
 // 2) manager creates a one-time code and tells the employee
 // 3) employee enters the code + a new password
 app.post('/forgot-password', (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
-  const user = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email);
+  const user = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(cleanEmail(req.body.email));
   if (user) {
     const pending = db.prepare('SELECT id FROM password_resets WHERE userId = ? AND codeHash IS NULL').get(user.id);
     if (!pending) {
@@ -353,7 +464,6 @@ app.post('/forgot-password', (req, res) => {
 });
 
 app.post('/reset-password', (req, res) => {
-  const email = String(req.body.email || '').trim().toLowerCase();
   const code = normalizeCode(req.body.code);
   const newPassword = String(req.body.newPassword || '');
 
@@ -366,7 +476,7 @@ app.post('/reset-password', (req, res) => {
     message: 'That code is wrong or has expired. Ask your manager for a new one.'
   });
 
-  const user = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(email);
+  const user = db.prepare('SELECT id FROM users WHERE lower(email) = ?').get(cleanEmail(req.body.email));
   if (!user) return wrongCode();
 
   const reset = db.prepare(`
@@ -390,7 +500,7 @@ app.post('/reset-password', (req, res) => {
 });
 
 // =====================================================================
-// Employee routes (must be logged in; everything uses req.user.id)
+// Employee routes (must be logged in; everything uses req.user)
 // =====================================================================
 
 app.post('/logout', requireLogin, (req, res) => {
@@ -411,7 +521,7 @@ app.post('/clock-in', requireLogin, (req, res) => {
     return res.status(400).json({ success: false, message: 'You are already clocked in.' });
   }
 
-  const sites = db.prepare('SELECT * FROM sites WHERE company = ?').all(req.user.company);
+  const sites = db.prepare('SELECT * FROM sites WHERE companyId = ?').all(req.user.companyId);
   const matchedSite = sites.find(site =>
     distanceMeters(latitude, longitude, site.lat, site.lng) <= site.radiusMeters
   );
@@ -452,13 +562,12 @@ app.post('/clock-out', requireLogin, (req, res) => {
   res.json({ success: true, clockOut });
 });
 
-// NEW: the work sites for this person's company, so the app can show them on a map before clocking in
+// The work sites for this person's company, so the app can show them on a map before clocking in
 app.get('/my-sites', requireLogin, (req, res) => {
-  const rows = db.prepare('SELECT name, lat, lng, radiusMeters FROM sites WHERE company = ? ORDER BY name').all(req.user.company);
+  const rows = db.prepare('SELECT name, lat, lng, radiusMeters FROM sites WHERE companyId = ? ORDER BY name').all(req.user.companyId);
   res.json(rows);
 });
 
-// Only this person's own punches (replaces the old /entries that returned everyone's)
 app.get('/my-entries', requireLogin, (req, res) => {
   const rows = db.prepare(`
     SELECT id, clockIn, clockOut, approved, site
@@ -497,7 +606,6 @@ app.post('/pto-request', requireLogin, (req, res) => {
   res.json({ success: true });
 });
 
-// NEW: lets employees see whether their time off was approved
 app.get('/my-pto', requireLogin, (req, res) => {
   const rows = db.prepare(`
     SELECT id, startDate, endDate, reason, status
@@ -510,71 +618,175 @@ app.get('/my-pto', requireLogin, (req, res) => {
 });
 
 // =====================================================================
-// Manager routes (must be logged in AND be a manager)
-// The manager can switch between all companies, same as before.
+// Companies (owner sees all; a manager sees only their own)
+// =====================================================================
+
+app.get('/me', requireLogin, (req, res) => res.json(req.user));
+
+app.get('/companies', requireManager, (req, res) => {
+  const where = req.user.role === 'owner' ? '' : 'WHERE companies.id = ?';
+  const params = req.user.role === 'owner' ? [] : [req.user.companyId];
+  const companies = db.prepare(`
+    SELECT companies.id, companies.name, companies.joinCode,
+      (SELECT COUNT(*) FROM users WHERE users.companyId = companies.id AND role = 'employee') AS employeeCount
+    FROM companies ${where}
+    ORDER BY companies.name COLLATE NOCASE
+  `).all(...params);
+
+  // The owner also sees each company's managers
+  if (req.user.role === 'owner') {
+    const managers = db.prepare("SELECT id, name, email, companyId FROM users WHERE role = 'manager' ORDER BY name").all();
+    companies.forEach(c => { c.managers = managers.filter(m => m.companyId === c.id); });
+  }
+  res.json(companies);
+});
+
+app.post('/companies', requireOwner, (req, res) => {
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  if (!name) return res.status(400).json({ success: false, message: 'Give the company a name.' });
+  if (db.prepare('SELECT 1 FROM companies WHERE lower(name) = lower(?)').get(name)) {
+    return res.status(400).json({ success: false, message: 'A company with that name already exists.' });
+  }
+  const info = db.prepare('INSERT INTO companies (name, joinCode, createdAt) VALUES (?, ?, ?)')
+    .run(name, newJoinCode(), Date.now());
+  res.json({ success: true, id: info.lastInsertRowid });
+});
+
+app.post('/companies/:id/rename', requireOwner, (req, res) => {
+  const id = Number(req.params.id);
+  const name = String(req.body.name || '').trim().slice(0, 80);
+  if (!name) return res.status(400).json({ success: false, message: 'The name can\'t be empty.' });
+  if (db.prepare('SELECT 1 FROM companies WHERE lower(name) = lower(?) AND id <> ?').get(name, id)) {
+    return res.status(400).json({ success: false, message: 'Another company already has that name.' });
+  }
+  const info = db.transaction(() => {
+    const result = db.prepare('UPDATE companies SET name = ? WHERE id = ?').run(name, id);
+    // keep the old text columns in step, so nothing older reads a stale name
+    db.prepare('UPDATE users SET company = ? WHERE companyId = ?').run(name, id);
+    db.prepare('UPDATE sites SET company = ? WHERE companyId = ?').run(name, id);
+    return result;
+  })();
+  if (!info.changes) return res.status(404).json({ success: false, message: 'Company not found.' });
+  res.json({ success: true });
+});
+
+// Makes a fresh join code (use it if the old one got shared with the wrong people).
+// People who already joined aren't affected.
+app.post('/companies/:id/new-code', requireManager, (req, res) => {
+  const id = Number(req.params.id);
+  if (!canManage(req, id)) return res.status(404).json({ success: false, message: 'Company not found.' });
+  const code = newJoinCode();
+  const info = db.prepare('UPDATE companies SET joinCode = ? WHERE id = ?').run(code, id);
+  if (!info.changes) return res.status(404).json({ success: false, message: 'Company not found.' });
+  res.json({ success: true, joinCode: code });
+});
+
+// Only empty companies can be deleted, so nobody's hours vanish by accident
+app.delete('/companies/:id', requireOwner, (req, res) => {
+  const id = Number(req.params.id);
+  const people = db.prepare('SELECT COUNT(*) AS n FROM users WHERE companyId = ?').get(id).n;
+  if (people > 0) {
+    return res.status(400).json({ success: false, message: 'This company still has people in it. Delete or move them first.' });
+  }
+  db.transaction(() => {
+    db.prepare('DELETE FROM sites WHERE companyId = ?').run(id);
+    db.prepare('DELETE FROM companies WHERE id = ?').run(id);
+  })();
+  res.json({ success: true });
+});
+
+// The owner creates a manager account for a company (for example, a new client)
+app.post('/companies/:id/managers', requireOwner, (req, res) => {
+  const company = db.prepare('SELECT id, name FROM companies WHERE id = ?').get(Number(req.params.id));
+  if (!company) return res.status(404).json({ success: false, message: 'Company not found.' });
+
+  const name = String(req.body.name || '').trim();
+  const email = cleanEmail(req.body.email);
+  const password = String(req.body.password || '');
+  if (!name) return res.status(400).json({ success: false, message: 'Enter the manager\'s name.' });
+  if (!email.includes('@')) return res.status(400).json({ success: false, message: 'Enter a valid email.' });
+  if (password.length < 8) return res.status(400).json({ success: false, message: 'The password needs at least 8 characters.' });
+  if (db.prepare('SELECT 1 FROM users WHERE lower(email) = ?').get(email)) {
+    return res.status(400).json({ success: false, message: 'That email is already registered.' });
+  }
+
+  db.prepare("INSERT INTO users (company, companyId, name, email, password, role) VALUES (?, ?, ?, ?, ?, 'manager')")
+    .run(company.name, company.id, name, email, bcrypt.hashSync(password, 10));
+  res.json({ success: true });
+});
+
+app.delete('/managers/:id', requireOwner, (req, res) => {
+  const mgr = db.prepare("SELECT id FROM users WHERE id = ? AND role = 'manager'").get(req.params.id);
+  if (!mgr) return res.status(404).json({ success: false, message: 'Manager not found.' });
+  db.transaction(() => {
+    db.prepare('DELETE FROM sessions WHERE userId = ?').run(mgr.id);
+    db.prepare('DELETE FROM user_devices WHERE userId = ?').run(mgr.id);
+    db.prepare('DELETE FROM password_resets WHERE userId = ?').run(mgr.id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(mgr.id);
+  })();
+  res.json({ success: true });
+});
+
+// =====================================================================
+// Manager routes (manager = their own company only; owner = the company they picked)
 // =====================================================================
 
 app.get('/employees', requireManager, (req, res) => {
-  const { company } = req.query;
-  const sql = `
-    SELECT users.id, users.company, users.name, users.email, users.hourlyRate,
+  const company = companyScope(req, res); if (!company) return;
+  res.json(db.prepare(`
+    SELECT users.id, users.name, users.email, users.hourlyRate,
       (SELECT COUNT(DISTINCT deviceId) FROM user_devices WHERE userId = users.id) AS deviceCount
     FROM users
-    WHERE role = 'employee' ${company ? 'AND company = ?' : ''}
-    ORDER BY users.name
-  `;
-  res.json(db.prepare(sql).all(...(company ? [company] : [])));
+    WHERE role = 'employee' AND companyId = ?
+    ORDER BY users.name COLLATE NOCASE
+  `).all(company.id));
 });
 
 app.post('/set-rate', requireManager, (req, res) => {
-  const { employeeId, hourlyRate } = req.body;
+  const { hourlyRate } = req.body;
   if (!isNumber(hourlyRate) || hourlyRate < 0) {
     return res.status(400).json({ success: false, message: 'Enter a valid pay rate.' });
   }
-  db.prepare('UPDATE users SET hourlyRate = ? WHERE id = ?').run(hourlyRate, employeeId);
+  const emp = findManagedEmployee(req, res, req.body.employeeId); if (!emp) return;
+  db.prepare('UPDATE users SET hourlyRate = ? WHERE id = ?').run(hourlyRate, emp.id);
   res.json({ success: true });
 });
 
 // Deletes an employee and everything tied to them (shifts, time off, devices, logins, reset codes).
-// Only works on employees, so a manager can't delete themselves or another manager by accident.
 app.delete('/employees/:id', requireManager, (req, res) => {
-  const user = db.prepare("SELECT id FROM users WHERE id = ? AND role = 'employee'").get(req.params.id);
-  if (!user) return res.status(404).json({ success: false, message: 'Employee not found.' });
+  const emp = findManagedEmployee(req, res, req.params.id); if (!emp) return;
 
   // A transaction = all of these happen together, or none of them do
   db.transaction(() => {
-    db.prepare('DELETE FROM entries WHERE employeeId = ?').run(user.id);
-    db.prepare('DELETE FROM pto_requests WHERE employeeId = ?').run(user.id);
-    db.prepare('DELETE FROM user_devices WHERE userId = ?').run(user.id);
-    db.prepare('DELETE FROM sessions WHERE userId = ?').run(user.id);
-    db.prepare('DELETE FROM password_resets WHERE userId = ?').run(user.id);
-    db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+    db.prepare('DELETE FROM entries WHERE employeeId = ?').run(emp.id);
+    db.prepare('DELETE FROM pto_requests WHERE employeeId = ?').run(emp.id);
+    db.prepare('DELETE FROM user_devices WHERE userId = ?').run(emp.id);
+    db.prepare('DELETE FROM sessions WHERE userId = ?').run(emp.id);
+    db.prepare('DELETE FROM password_resets WHERE userId = ?').run(emp.id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(emp.id);
   })();
 
   res.json({ success: true });
 });
 
-// NEW: clears an employee's saved devices and logs them out everywhere
+// Clears an employee's saved devices and logs them out everywhere
 app.post('/reset-devices', requireManager, (req, res) => {
-  const { employeeId } = req.body;
-  db.prepare('DELETE FROM user_devices WHERE userId = ?').run(employeeId);
-  db.prepare('DELETE FROM sessions WHERE userId = ?').run(employeeId);
+  const emp = findManagedEmployee(req, res, req.body.employeeId); if (!emp) return;
+  db.prepare('DELETE FROM user_devices WHERE userId = ?').run(emp.id);
+  db.prepare('DELETE FROM sessions WHERE userId = ?').run(emp.id);
   res.json({ success: true });
 });
 
 app.get('/sites', requireManager, (req, res) => {
-  const { company } = req.query;
-  const rows = company
-    ? db.prepare('SELECT * FROM sites WHERE company = ? ORDER BY name').all(company)
-    : db.prepare('SELECT * FROM sites ORDER BY name').all();
-  res.json(rows);
+  const company = companyScope(req, res); if (!company) return;
+  res.json(db.prepare('SELECT id, name, lat, lng, radiusMeters FROM sites WHERE companyId = ? ORDER BY name').all(company.id));
 });
 
 app.post('/sites', requireManager, (req, res) => {
-  const { company, lat, lng, radiusMeters } = req.body;
+  const company = companyScope(req, res); if (!company) return;
+  const { lat, lng, radiusMeters } = req.body;
   const name = String(req.body.name || '').trim();
 
-  if (!COMPANIES.includes(company)) return res.status(400).json({ success: false, message: 'Unknown company.' });
   if (!name) return res.status(400).json({ success: false, message: 'Give the site a name.' });
   if (!isNumber(lat) || lat < -90 || lat > 90 || !isNumber(lng) || lng < -180 || lng > 180) {
     return res.status(400).json({ success: false, message: 'Latitude or longitude is not valid.' });
@@ -583,44 +795,56 @@ app.post('/sites', requireManager, (req, res) => {
     return res.status(400).json({ success: false, message: 'Radius must be more than 0.' });
   }
 
-  db.prepare('INSERT INTO sites (company, name, lat, lng, radiusMeters) VALUES (?, ?, ?, ?, ?)')
-    .run(company, name, lat, lng, radiusMeters);
+  db.prepare('INSERT INTO sites (company, companyId, name, lat, lng, radiusMeters) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(company.name, company.id, name, lat, lng, radiusMeters);
   res.json({ success: true });
 });
 
 app.delete('/sites/:id', requireManager, (req, res) => {
-  db.prepare('DELETE FROM sites WHERE id = ?').run(req.params.id);
+  const site = db.prepare('SELECT id, companyId FROM sites WHERE id = ?').get(req.params.id);
+  if (!site || !canManage(req, site.companyId)) return res.status(404).json({ success: false, message: 'Site not found.' });
+  db.prepare('DELETE FROM sites WHERE id = ?').run(site.id);
   res.json({ success: true });
 });
 
-// NEW: who is on the clock right now (to catch forgotten clock-outs)
+// Who is on the clock right now (to catch forgotten clock-outs)
 app.get('/open-entries', requireManager, (req, res) => {
-  const { company } = req.query;
-  const sql = `
+  const company = companyScope(req, res); if (!company) return;
+  res.json(db.prepare(`
     SELECT entries.*, users.name AS employeeName FROM entries
     JOIN users ON users.id = entries.employeeId
-    WHERE entries.clockOut IS NULL
-    ${company ? 'AND users.company = ?' : ''}
+    WHERE entries.clockOut IS NULL AND users.companyId = ?
     ORDER BY entries.clockIn
-  `;
-  res.json(db.prepare(sql).all(...(company ? [company] : [])));
+  `).all(company.id));
 });
 
 app.get('/pending-entries', requireManager, (req, res) => {
-  const { company } = req.query;
-  const sql = `
+  const company = companyScope(req, res); if (!company) return;
+  res.json(db.prepare(`
     SELECT entries.*, users.name AS employeeName FROM entries
     JOIN users ON users.id = entries.employeeId
-    WHERE entries.clockOut IS NOT NULL AND entries.approved = 0
-    ${company ? 'AND users.company = ?' : ''}
+    WHERE entries.clockOut IS NOT NULL AND entries.approved = 0 AND users.companyId = ?
     ORDER BY entries.clockIn
-  `;
-  res.json(db.prepare(sql).all(...(company ? [company] : [])));
+  `).all(company.id));
 });
 
-// NEW: lets the manager fix a shift's times (e.g. someone forgot to clock out)
+// Finds a shift and checks it belongs to someone in a company this manager runs
+function findManagedEntry(req, res, entryId) {
+  const entry = db.prepare(`
+    SELECT entries.id, users.companyId FROM entries
+    JOIN users ON users.id = entries.employeeId
+    WHERE entries.id = ?
+  `).get(entryId);
+  if (!entry || !canManage(req, entry.companyId)) {
+    res.status(404).json({ success: false, message: 'Shift not found.' });
+    return null;
+  }
+  return entry;
+}
+
+// Lets the manager fix a shift's times (e.g. someone forgot to clock out)
 app.post('/update-entry', requireManager, (req, res) => {
-  const { entryId, clockIn, clockOut } = req.body;
+  const { clockIn, clockOut } = req.body;
 
   if (!isNumber(clockIn) || !isNumber(clockOut)) {
     return res.status(400).json({ success: false, message: 'Both times are required.' });
@@ -629,29 +853,27 @@ app.post('/update-entry', requireManager, (req, res) => {
     return res.status(400).json({ success: false, message: 'Clock-out must be after clock-in.' });
   }
 
-  const info = db.prepare('UPDATE entries SET clockIn = ?, clockOut = ?, approved = 0 WHERE id = ?')
-    .run(clockIn, clockOut, entryId);
-  if (info.changes === 0) {
-    return res.status(404).json({ success: false, message: 'Shift not found.' });
-  }
+  const entry = findManagedEntry(req, res, req.body.entryId); if (!entry) return;
+  db.prepare('UPDATE entries SET clockIn = ?, clockOut = ?, approved = 0 WHERE id = ?').run(clockIn, clockOut, entry.id);
   res.json({ success: true });
 });
 
 app.post('/approve-entry', requireManager, (req, res) => {
-  db.prepare('UPDATE entries SET approved = 1 WHERE id = ? AND clockOut IS NOT NULL').run(req.body.entryId);
+  const entry = findManagedEntry(req, res, req.body.entryId); if (!entry) return;
+  db.prepare('UPDATE entries SET approved = 1 WHERE id = ? AND clockOut IS NOT NULL').run(entry.id);
   res.json({ success: true });
 });
 
 app.get('/pto-requests', requireManager, (req, res) => {
-  const { status, company } = req.query;
+  const company = companyScope(req, res); if (!company) return;
+  const { status } = req.query;
   let sql = `
     SELECT pto_requests.*, users.name AS employeeName FROM pto_requests
     JOIN users ON users.id = pto_requests.employeeId
-    WHERE 1=1
+    WHERE users.companyId = ?
   `;
-  const params = [];
+  const params = [company.id];
   if (status) { sql += ' AND pto_requests.status = ?'; params.push(status); }
-  if (company) { sql += ' AND users.company = ?'; params.push(company); }
   sql += ' ORDER BY pto_requests.startDate';
   res.json(db.prepare(sql).all(...params));
 });
@@ -661,34 +883,39 @@ app.post('/pto-decision', requireManager, (req, res) => {
   if (!['approved', 'denied'].includes(decision)) {
     return res.status(400).json({ success: false, message: 'Invalid decision.' });
   }
-  db.prepare('UPDATE pto_requests SET status = ? WHERE id = ?').run(decision, requestId);
+  const request = db.prepare(`
+    SELECT pto_requests.id, users.companyId FROM pto_requests
+    JOIN users ON users.id = pto_requests.employeeId
+    WHERE pto_requests.id = ?
+  `).get(requestId);
+  if (!request || !canManage(req, request.companyId)) {
+    return res.status(404).json({ success: false, message: 'Request not found.' });
+  }
+  db.prepare('UPDATE pto_requests SET status = ? WHERE id = ?').run(decision, request.id);
   res.json({ success: true });
 });
 
 // ---- Password help (manager side) ----
 app.get('/reset-requests', requireManager, (req, res) => {
-  const { company } = req.query;
-  const sql = `
+  const company = companyScope(req, res); if (!company) return;
+  res.json(db.prepare(`
     SELECT password_resets.id, password_resets.userId, password_resets.requestedAt, users.name, users.email
     FROM password_resets
     JOIN users ON users.id = password_resets.userId
-    WHERE password_resets.codeHash IS NULL AND users.role = 'employee'
-    ${company ? 'AND users.company = ?' : ''}
+    WHERE password_resets.codeHash IS NULL AND users.role = 'employee' AND users.companyId = ?
     ORDER BY password_resets.requestedAt
-  `;
-  res.json(db.prepare(sql).all(...(company ? [company] : [])));
+  `).all(company.id));
 });
 
 // Makes a one-time code (good for 24 hours). Only the scrambled version is stored,
 // so the manager sees the code once and should pass it straight to the employee.
 app.post('/reset-code', requireManager, (req, res) => {
-  const user = db.prepare("SELECT id, name FROM users WHERE id = ? AND role = 'employee'").get(req.body.userId);
-  if (!user) return res.status(404).json({ success: false, message: 'Employee not found.' });
+  const emp = findManagedEmployee(req, res, req.body.userId); if (!emp) return;
 
-  const code = makeResetCode();
-  db.prepare('DELETE FROM password_resets WHERE userId = ?').run(user.id);
+  const code = randomCode(8);
+  db.prepare('DELETE FROM password_resets WHERE userId = ?').run(emp.id);
   db.prepare('INSERT INTO password_resets (userId, codeHash, expiresAt, requestedAt) VALUES (?, ?, ?, ?)')
-    .run(user.id, bcrypt.hashSync(code, 10), Date.now() + DAY_MS, Date.now());
+    .run(emp.id, bcrypt.hashSync(code, 10), Date.now() + DAY_MS, Date.now());
 
   res.json({ success: true, code: code.slice(0, 4) + '-' + code.slice(4) });
 });
@@ -696,19 +923,16 @@ app.post('/reset-code', requireManager, (req, res) => {
 // ---- CSV exports ----
 
 app.get('/export/attendance', requireManager, (req, res) => {
-  const { company, tz } = req.query;
+  const company = companyScope(req, res); if (!company) return;
   const { startMs, endMs } = exportRange(req.query);
-  const fmt = makeTimeFormatter(tz);
+  const fmt = makeTimeFormatter(req.query.tz);
 
-  // JOIN pulls the employee's name in the same query (the old code looked each one up separately)
-  const sql = `
+  const rows = db.prepare(`
     SELECT entries.*, users.name AS employeeName FROM entries
     JOIN users ON users.id = entries.employeeId
-    WHERE entries.clockIn >= ? AND entries.clockIn <= ?
-    ${company ? 'AND users.company = ?' : ''}
+    WHERE entries.clockIn >= ? AND entries.clockIn <= ? AND users.companyId = ?
     ORDER BY entries.clockIn
-  `;
-  const rows = db.prepare(sql).all(...(company ? [startMs, endMs, company] : [startMs, endMs]));
+  `).all(startMs, endMs, company.id);
 
   const formatted = rows.map(r => ({
     employee: r.employeeName,
@@ -721,28 +945,26 @@ app.get('/export/attendance', requireManager, (req, res) => {
 
   const csv = toCSV(formatted, ['employee', 'site', 'clockIn', 'clockOut', 'hours', 'approved']);
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="punchly-attendance.csv"');
+  res.setHeader('Content-Disposition', `attachment; filename="punchly-attendance-${safeFilePart(company.name)}.csv"`);
   res.send(csv);
 });
 
 app.get('/export/payroll', requireManager, (req, res) => {
-  const { company } = req.query;
+  const company = companyScope(req, res); if (!company) return;
   const { startMs, endMs } = exportRange(req.query);
 
   // Pay only counts APPROVED shifts. Unapproved hours get their own column
   // so the boss can see if something still needs approving before paying people.
-  const sql = `
+  const rows = db.prepare(`
     SELECT users.name AS employeeName, users.hourlyRate,
       SUM(CASE WHEN entries.approved = 1 THEN entries.clockOut - entries.clockIn ELSE 0 END) AS approvedMs,
       SUM(CASE WHEN entries.approved = 0 THEN entries.clockOut - entries.clockIn ELSE 0 END) AS unapprovedMs
     FROM entries
     JOIN users ON users.id = entries.employeeId
-    WHERE entries.clockOut IS NOT NULL AND entries.clockIn >= ? AND entries.clockIn <= ?
-    ${company ? 'AND users.company = ?' : ''}
+    WHERE entries.clockOut IS NOT NULL AND entries.clockIn >= ? AND entries.clockIn <= ? AND users.companyId = ?
     GROUP BY entries.employeeId
     ORDER BY users.name
-  `;
-  const rows = db.prepare(sql).all(...(company ? [startMs, endMs, company] : [startMs, endMs]));
+  `).all(startMs, endMs, company.id);
 
   const formatted = rows.map(r => {
     const hours = msToHours(r.approvedMs);
@@ -758,7 +980,7 @@ app.get('/export/payroll', requireManager, (req, res) => {
 
   const csv = toCSV(formatted, ['employee', 'approvedHours', 'hourlyRate', 'grossPay', 'unapprovedHours']);
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="punchly-payroll.csv"');
+  res.setHeader('Content-Disposition', `attachment; filename="punchly-payroll-${safeFilePart(company.name)}.csv"`);
   res.send(csv);
 });
 
