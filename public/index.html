@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Time Clock</title>
+<title>Punchly</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -12,7 +12,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
 /* =====================================================================
-   Time Clock styles, shared by index.html and manager.html
+   Punchly styles, shared by index.html and manager.html
    Colors live in the variables below: change them here and both pages update.
    ===================================================================== */
 
@@ -392,7 +392,7 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
       <path d="M20 15v6l4.2 2.8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="31.5" cy="8.5" r="4.2" fill="#F48FBF" stroke="#fff" stroke-width="2"/>
     </svg>
-    <span>Time Clock</span>
+    <span>Punchly</span>
   </div>
   <div class="topbar-actions">
     <button class="icon-btn" data-theme-toggle></button>
@@ -406,7 +406,7 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
   <section id="authSection" hidden>
     <div style="margin:14px 0 20px;">
       <h1 id="authTitle">Welcome back</h1>
-      <p class="muted" id="authSubtitle">Log in to clock in and out.</p>
+      <p class="muted" id="authSubtitle">Log in to Punchly to clock in and out.</p>
     </div>
 
     <div class="card" id="loginCard">
@@ -641,7 +641,7 @@ function distanceMeters(lat1, lng1, lat2, lng2) {
 // Screens
 // ---------------------------------------------------------------
 const AUTH_TEXT = {
-  login:    ['Welcome back', 'Log in to clock in and out.'],
+  login:    ['Welcome back', 'Log in to Punchly to clock in and out.'],
   register: ['Create your account', 'You only have to do this once.'],
   forgot:   ['Reset your password', "It happens. Let's get you back in."]
 };

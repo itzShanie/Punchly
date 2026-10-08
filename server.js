@@ -721,7 +721,7 @@ app.get('/export/attendance', requireManager, (req, res) => {
 
   const csv = toCSV(formatted, ['employee', 'site', 'clockIn', 'clockOut', 'hours', 'approved']);
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="attendance.csv"');
+  res.setHeader('Content-Disposition', 'attachment; filename="punchly-attendance.csv"');
   res.send(csv);
 });
 
@@ -758,7 +758,7 @@ app.get('/export/payroll', requireManager, (req, res) => {
 
   const csv = toCSV(formatted, ['employee', 'approvedHours', 'hourlyRate', 'grossPay', 'unapprovedHours']);
   res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="payroll.csv"');
+  res.setHeader('Content-Disposition', 'attachment; filename="punchly-payroll.csv"');
   res.send(csv);
 });
 
@@ -770,5 +770,5 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log('Server running on port ' + PORT);
+  console.log('Punchly is running on port ' + PORT);
 });

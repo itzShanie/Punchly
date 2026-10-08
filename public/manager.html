@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Manager Dashboard</title>
+<title>Punchly · Manager</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 /* =====================================================================
-   Time Clock styles, shared by index.html and manager.html
+   Punchly styles, shared by index.html and manager.html
    Colors live in the variables below: change them here and both pages update.
    ===================================================================== */
 
@@ -389,7 +389,7 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
       <path d="M20 15v6l4.2 2.8" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
       <circle cx="31.5" cy="8.5" r="4.2" fill="#F48FBF" stroke="#fff" stroke-width="2"/>
     </svg>
-    <span>Time Clock<span class="brand-sub">Manager</span></span>
+    <span>Punchly<span class="brand-sub">Manager</span></span>
   </div>
   <div class="topbar-actions">
     <button class="icon-btn" data-theme-toggle></button>
@@ -964,7 +964,7 @@ async function downloadCsv(path, kind) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${kind} ${currentCompany} ${start || 'start'} to ${end || 'today'}.csv`;
+    a.download = `Punchly ${kind} ${currentCompany} ${start || 'start'} to ${end || 'today'}.csv`;
     document.body.appendChild(a);
     a.click();
     a.remove();
