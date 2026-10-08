@@ -1056,7 +1056,7 @@ $('forgotRequestBtn').addEventListener('click', async () => {
   try {
     await api('/forgot-password', { method: 'POST', body: { email } });
     msg.className = 'msg ok';
-    msg.textContent = 'Request sent. Your manager will see it on their dashboard and give you a code.';
+    msg.textContent = 'Request sent. Your manager will see it on their dashboard and give you a code. Make sure the email is the one you signed up with.';
   } catch (err) {
     msg.textContent = err.message;
   }

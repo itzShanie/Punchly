@@ -896,21 +896,34 @@ app.post('/pto-decision', requireManager, (req, res) => {
 });
 
 // ---- Password help (manager side) ----
+// The owner sees EVERY request (all companies, plus managers who forgot theirs),
+// so nothing gets missed just because the company picker is on a different company.
+// A manager sees only their own company's employees.
 app.get('/reset-requests', requireManager, (req, res) => {
-  const company = companyScope(req, res); if (!company) return;
+  const owner = req.user.role === 'owner';
   res.json(db.prepare(`
-    SELECT password_resets.id, password_resets.userId, password_resets.requestedAt, users.name, users.email
+    SELECT password_resets.id, password_resets.userId, password_resets.requestedAt,
+           users.name, users.email, users.role, companies.name AS companyName
     FROM password_resets
     JOIN users ON users.id = password_resets.userId
-    WHERE password_resets.codeHash IS NULL AND users.role = 'employee' AND users.companyId = ?
+    LEFT JOIN companies ON companies.id = users.companyId
+    WHERE password_resets.codeHash IS NULL
+      AND ${owner ? "users.role IN ('employee', 'manager')" : "users.role = 'employee' AND users.companyId = ?"}
     ORDER BY password_resets.requestedAt
-  `).all(company.id));
+  `).all(...(owner ? [] : [req.user.companyId])));
 });
 
 // Makes a one-time code (good for 24 hours). Only the scrambled version is stored,
 // so the manager sees the code once and should pass it straight to the employee.
 app.post('/reset-code', requireManager, (req, res) => {
-  const emp = findManagedEmployee(req, res, req.body.userId); if (!emp) return;
+  // The owner can also make codes for managers; a manager only for their own employees
+  let emp;
+  if (req.user.role === 'owner') {
+    emp = db.prepare("SELECT id FROM users WHERE id = ? AND role IN ('employee', 'manager')").get(req.body.userId);
+    if (!emp) return res.status(404).json({ success: false, message: 'Person not found.' });
+  } else {
+    emp = findManagedEmployee(req, res, req.body.userId); if (!emp) return;
+  }
 
   const code = randomCode(8);
   db.prepare('DELETE FROM password_resets WHERE userId = ?').run(emp.id);

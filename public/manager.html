@@ -482,7 +482,7 @@ dialog::backdrop{ background:rgba(15,23,36,.45); }
 
     <div class="card">
       <div class="card-head"><h2>Password help <span class="badge count" id="resetCount" hidden></span></h2></div>
-      <p class="hint">When someone taps "Forgot password", they show up here. Create a code and give it to them in person or by text.</p>
+      <p class="hint" id="resetHint">When someone taps "Forgot password", they show up here. Create a code and give it to them in person or by text.</p>
       <div id="resetList"></div>
     </div>
 
@@ -975,15 +975,16 @@ async function decide(requestId, decision) {
 // Password help
 // ---------------------------------------------------------------
 async function loadResetRequests() {
-  const rows = await api('/reset-requests?' + companyParam());
+  const rows = await api('/reset-requests');
   setCount('resetCount', rows.length);
   const list = $('resetList');
   list.innerHTML = rows.length === 0 ? '<div class="empty">Nobody has asked for a password reset.</div>' : '';
   rows.forEach(r => {
     const div = makeRow(`
       <div>
-        <div class="who">${escapeHtml(r.name)}</div>
+        <div class="who">${escapeHtml(r.name)}${r.role === 'manager' ? ' <span class="badge count">Manager</span>' : ''}</div>
         <div class="sub">${escapeHtml(r.email)}, asked ${fmtTime(r.requestedAt)}</div>
+        ${isOwner() && r.companyName ? `<div class="sub">${escapeHtml(r.companyName)}</div>` : ''}
       </div>
       <button class="btn primary small">Create reset code</button>`);
     div.querySelector('button').addEventListener('click', () => createResetCode(r.userId, r.name));
@@ -1201,10 +1202,19 @@ async function showDashboard() {
     currentManager = await api('/me');
     localStorage.setItem('managerSession', JSON.stringify({ token, user: currentManager }));
     $('brandSub').textContent = isOwner() ? 'Owner' : 'Manager';
+    if (isOwner()) $('resetHint').textContent = 'Requests from every company show up here, including managers who forgot theirs. Create a code and give it to them in person or by text.';
     await loadCompanies();
     loadAll();
   } catch (err) { showError(err); }
 }
+
+// Refresh every 30 seconds while the page is open, so new requests and punches show up on their own
+setInterval(() => {
+  if (token && currentCompany && document.visibilityState === 'visible') loadAll();
+}, 30000);
+document.addEventListener('visibilitychange', () => {
+  if (token && currentCompany && document.visibilityState === 'visible') loadAll();
+});
 
 restoreSession();
 if (token) showDashboard(); else $('loginSection').hidden = false;
